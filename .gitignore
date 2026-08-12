@@ -1,0 +1,24 @@
+# Secrets and machine-local configuration
+**/.env
+**/.env.*
+!**/.env.example
+**/local.properties
+*.keystore
+*.jks
+
+# Dependencies and generated output
+**/node_modules/
+**/dist/
+**/.next/
+**/coverage/
+**/.gradle/
+**/build/
+**/tmp/
+**/*.log
+**/.git.pre-monorepo/
+
+# IDE and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

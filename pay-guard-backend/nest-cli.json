@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/nest-cli",
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": {
+    "deleteOutDir": true,
+    "plugins": [
+      {
+        "name": "@nestjs/swagger",
+        "options": {
+          "classValidatorShim": true,
+          "introspectComments": true,
+          "dtoFileNameSuffix": [".dto.ts", ".types.ts", ".model.ts"]
+        }
+      }
+    ],
+    "assets": [
+      {
+        "include": "qr-processing/workers/*.mjs",
+        "outDir": "dist"
+      }
+    ]
+  }
+}

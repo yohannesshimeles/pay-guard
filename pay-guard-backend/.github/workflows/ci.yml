@@ -1,0 +1,37 @@
+name: Backend CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: payguard_test
+          POSTGRES_USER: payguard
+          POSTGRES_PASSWORD: payguard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U payguard -d payguard_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://payguard:payguard@localhost:5432/payguard_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm install --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:integration
+      - run: npm run build

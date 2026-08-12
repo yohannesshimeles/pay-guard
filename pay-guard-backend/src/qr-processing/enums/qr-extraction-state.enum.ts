@@ -1,0 +1,6 @@
+export enum QrExtractionState {
+  NO_QR = 'NO_QR',
+  SINGLE_QR = 'SINGLE_QR',
+  MULTIPLE_QR = 'MULTIPLE_QR',
+  UNSUPPORTED_PROOF = 'UNSUPPORTED_PROOF',
+}
