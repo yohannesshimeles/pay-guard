@@ -5,6 +5,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { AuthenticatedPrincipal } from '../auth/auth.types';
+import { auditActorFromPrincipal } from '../audit/v2-audit.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import {
   TransactionSubmissionConflictError,
@@ -39,6 +40,8 @@ export class TransactionSubmissionService {
         branchId,
         workAssignmentId: actor.workAssignmentId,
         submittedByUserId: actor.userId,
+        actor: auditActorFromPrincipal(actor),
+        sessionId: actor.sessionId,
       });
     } catch (error) {
       if (error instanceof TransactionSubmissionConflictError) {

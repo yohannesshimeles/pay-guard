@@ -4,6 +4,8 @@ import {
   NotificationPreferenceView, NotificationRecipient, NotificationTemplateKey,
   NotificationType, NotificationView,
 } from './notification.models';
+import { V2AuditService } from '../audit/v2-audit.service';
+import { V2SelectedAuthContext } from '../auth/v2-auth.types';
 
 type NotificationRow = {
   id: string; title: string; message: string; notification_type: string;
@@ -12,7 +14,10 @@ type NotificationRow = {
 
 @Injectable()
 export class NotificationDao {
-  constructor(private readonly dao: CentralDao) {}
+  constructor(
+    private readonly dao: CentralDao,
+    private readonly audit: V2AuditService,
+  ) {}
 
   async createWithin(transaction: DaoTransaction, input: {
     recipient: NotificationRecipient;
@@ -134,31 +139,59 @@ export class NotificationDao {
 
   async upsertPreference(recipient: NotificationRecipient, input: {
     notificationType: NotificationType; inAppEnabled: boolean; pushEnabled: boolean;
-  }) {
+  }, auditInput: { actor: V2SelectedAuthContext; sessionId: string }) {
     const userId = recipient.identityType === 'BUSINESS_USER' ? recipient.id : null;
     const platformAdminId = recipient.identityType === 'PLATFORM_ADMIN'
       ? recipient.id : null;
     const conflict = userId
       ? '(user_id, notification_type) WHERE user_id IS NOT NULL'
       : '(platform_admin_id, notification_type) WHERE platform_admin_id IS NOT NULL';
-    const row = await this.dao.one<{
-      notification_type: string; in_app_enabled: boolean; push_enabled: boolean;
-    }>(
-      `INSERT INTO notification_preferences (
+    return this.dao.transaction(async (transaction) => {
+      const previous = await transaction.optional<{
+        in_app_enabled: boolean; push_enabled: boolean;
+      }>(
+        `SELECT in_app_enabled, push_enabled FROM notification_preferences
+         WHERE notification_type = $3
+           AND (($1::uuid IS NOT NULL AND user_id = $1)
+             OR ($2::uuid IS NOT NULL AND platform_admin_id = $2))`,
+        [userId, platformAdminId, input.notificationType],
+      );
+      const row = await transaction.one<{
+        id: string; notification_type: string;
+        in_app_enabled: boolean; push_enabled: boolean;
+      }>(
+        `INSERT INTO notification_preferences (
          user_id, platform_admin_id, notification_type, in_app_enabled, push_enabled
        ) VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT ${conflict} DO UPDATE SET
          in_app_enabled = EXCLUDED.in_app_enabled,
          push_enabled = EXCLUDED.push_enabled, updated_at = now()
-       RETURNING notification_type, in_app_enabled, push_enabled`,
-      [userId, platformAdminId, input.notificationType,
-       input.inAppEnabled, input.pushEnabled],
-    );
-    return {
-      notificationType: row.notification_type,
-      inAppEnabled: row.in_app_enabled,
-      pushEnabled: row.push_enabled,
-    } satisfies NotificationPreferenceView;
+       RETURNING id, notification_type, in_app_enabled, push_enabled`,
+        [userId, platformAdminId, input.notificationType,
+         input.inAppEnabled, input.pushEnabled],
+      );
+      await this.audit.recordWithin(transaction, {
+        actor: auditInput.actor,
+        sessionId: auditInput.sessionId,
+        actionType: 'NOTIFICATION_PREFERENCE_UPDATED',
+        recordType: 'NOTIFICATION_PREFERENCE',
+        recordId: row.id,
+        previousValue: previous ? {
+          inAppEnabled: previous.in_app_enabled,
+          pushEnabled: previous.push_enabled,
+        } : undefined,
+        newValue: {
+          notificationType: row.notification_type,
+          inAppEnabled: row.in_app_enabled,
+          pushEnabled: row.push_enabled,
+        },
+      });
+      return {
+        notificationType: row.notification_type,
+        inAppEnabled: row.in_app_enabled,
+        pushEnabled: row.push_enabled,
+      } satisfies NotificationPreferenceView;
+    });
   }
 }
 

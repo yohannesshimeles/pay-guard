@@ -16,6 +16,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { AuthenticatedPrincipal } from '../auth/auth.types';
+import { auditActorFromPrincipal } from '../audit/v2-audit.service';
 import { APP_CONFIG, AppConfig } from '../config/app-config';
 import { DEFAULT_MAX_PROOF_BYTES } from './proof-file.validator';
 import { ProofIntakeService } from './proof-intake.service';
@@ -89,6 +90,12 @@ export class ProofUploadController {
       transactionId,
       principal.userId,
       inspected,
+      {
+        actor: auditActorFromPrincipal(principal),
+        sessionId: principal.sessionId,
+        businessId: scope.businessId,
+        branchId: scope.branchId,
+      },
     );
     const candidate = inspected.extraction.candidates[0];
     const receiptMatch = this.receiptMatch(inspected, scope);

@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { CentralDao, DaoTransaction } from '../database/central.dao';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { V2SelectedAuthContext } from '../auth/v2-auth.types';
+import { V2AuditService } from '../audit/v2-audit.service';
 
 type SubmissionRow = {
   id: string;
@@ -27,6 +29,8 @@ export type CreateTransactionSubmission = CreateTransactionDto & {
   branchId: string;
   workAssignmentId: string;
   submittedByUserId: string;
+  actor: V2SelectedAuthContext;
+  sessionId: string;
 };
 
 export class TransactionSubmissionScopeError extends Error {
@@ -39,7 +43,10 @@ export class TransactionSubmissionConflictError extends Error {
 
 @Injectable()
 export class TransactionSubmissionDao {
-  constructor(private readonly dao: CentralDao) {}
+  constructor(
+    private readonly dao: CentralDao,
+    private readonly audit: V2AuditService,
+  ) {}
 
   create(input: CreateTransactionSubmission) {
     return this.dao.transaction((transaction) =>
@@ -132,6 +139,19 @@ export class TransactionSubmissionDao {
        ) VALUES ($1, NULL, 'PROCESSING', 'TRANSACTION_SUBMITTED', $2, 'SYSTEM')`,
       [inserted.id, input.submittedByUserId],
     );
+    await this.audit.recordWithin(transaction, {
+      actor: input.actor,
+      sessionId: input.sessionId,
+      actionType: 'TRANSACTION_SUBMITTED',
+      recordType: 'CUSTOMER_TRANSACTION',
+      recordId: inserted.id,
+      businessId: input.businessId,
+      branchId: input.branchId,
+      newValue: {
+        submissionMethod: inserted.submission_method,
+        status: inserted.current_status,
+      },
+    });
     return { transaction: this.present(inserted), replayed: false };
   }
 

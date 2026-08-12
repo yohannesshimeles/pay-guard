@@ -2,13 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { CentralDao } from '../database/central.dao';
 import { NotificationRecipient } from './notification.models';
 import { EncryptedNotificationToken } from './notification-token-crypto.service';
+import { V2AuditService } from '../audit/v2-audit.service';
+import { V2SelectedAuthContext } from '../auth/v2-auth.types';
 
 @Injectable()
 export class NotificationDeviceDao {
-  constructor(private readonly dao: CentralDao) {}
+  constructor(
+    private readonly dao: CentralDao,
+    private readonly audit: V2AuditService,
+  ) {}
 
   register(recipient: NotificationRecipient, platform: 'android' | 'ios' | 'web',
-    token: EncryptedNotificationToken) {
+    token: EncryptedNotificationToken,
+    auditInput: { actor: V2SelectedAuthContext; sessionId: string }) {
     return this.dao.transaction(async (transaction) => {
       const userId = recipient.identityType === 'BUSINESS_USER' ? recipient.id : null;
       const adminId = recipient.identityType === 'PLATFORM_ADMIN' ? recipient.id : null;
@@ -37,19 +43,42 @@ export class NotificationDeviceDao {
          token.fingerprint],
       );
       if (!registered) throw new NotificationDeviceOwnershipConflictError();
+      await this.audit.recordWithin(transaction, {
+        actor: auditInput.actor,
+        sessionId: auditInput.sessionId,
+        actionType: 'NOTIFICATION_DEVICE_REGISTERED',
+        recordType: 'NOTIFICATION_DEVICE',
+        recordId: registered.id,
+        newValue: { platform: registered.platform, active: true },
+      });
       return registered;
     });
   }
 
-  deactivate(recipient: NotificationRecipient, id: string) {
-    return this.dao.execute(
-      `UPDATE notification_devices SET is_active = false, deactivated_at = now()
+  deactivate(recipient: NotificationRecipient, id: string,
+    auditInput: { actor: V2SelectedAuthContext; sessionId: string }) {
+    return this.dao.transaction(async (transaction) => {
+      const affected = await transaction.execute(
+        `UPDATE notification_devices SET is_active = false, deactivated_at = now()
        WHERE id = $1 AND is_active
          AND (($2::uuid IS NOT NULL AND user_id = $2)
           OR ($3::uuid IS NOT NULL AND platform_admin_id = $3))`,
       [id, recipient.identityType === 'BUSINESS_USER' ? recipient.id : null,
        recipient.identityType === 'PLATFORM_ADMIN' ? recipient.id : null],
-    );
+      );
+      if (affected === 1) {
+        await this.audit.recordWithin(transaction, {
+          actor: auditInput.actor,
+          sessionId: auditInput.sessionId,
+          actionType: 'NOTIFICATION_DEVICE_DEACTIVATED',
+          recordType: 'NOTIFICATION_DEVICE',
+          recordId: id,
+          previousValue: { active: true },
+          newValue: { active: false },
+        });
+      }
+      return affected;
+    });
   }
 }
 

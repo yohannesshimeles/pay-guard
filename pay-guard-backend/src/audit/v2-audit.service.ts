@@ -3,6 +3,9 @@ import { PoolClient } from 'pg';
 import { DatabaseService } from '../database/database.service';
 import { DaoTransaction } from '../database/central.dao';
 import { V2SelectedAuthContext } from '../auth/v2-auth.types';
+import { AuthenticatedPrincipal } from '../auth/auth.types';
+import { requestContext } from '../common/request-context';
+import { sanitizeAuditMetadata, sanitizeAuditText } from './audit-sanitizer';
 
 export type V2AuditEvent = {
   actor: V2SelectedAuthContext;
@@ -54,10 +57,10 @@ export class V2AuditService {
          user_id, platform_admin_id, membership_id, role_code,
          business_id, branch_id, action_type, record_type, record_id,
          previous_value, new_value, reason, session_id,
-         platform_admin_session_id, result, failure_reason
+         platform_admin_session_id, result, failure_reason, correlation_id
        ) VALUES (
          $1, $2, $3, $4, $5, $6, $7, $8, $9,
-         $10, $11, $12, $13, $14, $15, $16
+         $10, $11, $12, $13, $14, $15, $16, $17
        )`,
       [
         isAdmin ? null : event.actor.subjectId,
@@ -69,14 +72,36 @@ export class V2AuditService {
         event.actionType,
         event.recordType,
         event.recordId ?? null,
-        event.previousValue ? JSON.stringify(event.previousValue) : null,
-        event.newValue ? JSON.stringify(event.newValue) : null,
-        event.reason ?? null,
+        serializeMetadata(event.previousValue),
+        serializeMetadata(event.newValue),
+        sanitizeAuditText(event.reason),
         isAdmin ? null : (event.sessionId ?? null),
         isAdmin ? (event.sessionId ?? null) : null,
         event.result ?? 'SUCCESS',
-        event.failureReason ?? null,
+        sanitizeAuditText(event.failureReason),
+        requestContext.getStore()?.correlationId ?? 'system',
       ],
     );
   }
+}
+
+function serializeMetadata(value: Record<string, unknown> | undefined): string | null {
+  const sanitized = sanitizeAuditMetadata(value);
+  return sanitized ? JSON.stringify(sanitized) : null;
+}
+
+export function auditActorFromPrincipal(
+  actor: AuthenticatedPrincipal,
+): V2SelectedAuthContext {
+  return {
+    identityType: actor.identityType === 'PLATFORM_ADMIN'
+      ? 'PLATFORM_ADMIN' : 'BUSINESS_USER',
+    subjectId: actor.userId,
+    role: actor.role === 'BUSINESS_OWNER' ? 'PRIMARY_OWNER' : actor.role,
+    businessId: actor.businessIds.length === 1 ? actor.businessIds[0] : undefined,
+    membershipId: actor.membershipId,
+    membershipRoleId: actor.membershipRoleId,
+    workAssignmentId: actor.workAssignmentId,
+    branchId: actor.branchId,
+  };
 }

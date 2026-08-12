@@ -3,6 +3,8 @@ import { CentralDao, DaoTransaction } from '../database/central.dao';
 import { TransactionReceiptEntity } from './entities/transaction-receipt.entity';
 import { ProofMimeType } from './enums/proof-mime-type.enum';
 import { StoredProofModel } from './models/proof-file.model';
+import { V2SelectedAuthContext } from '../auth/v2-auth.types';
+import { V2AuditService } from '../audit/v2-audit.service';
 
 type TransactionReceiptRow = {
   id: string;
@@ -21,17 +23,29 @@ export type CreateTransactionReceipt = {
   transactionId: string;
   submittedByUserId: string;
   proof: StoredProofModel;
+  audit?: {
+    actor: V2SelectedAuthContext;
+    sessionId: string;
+    businessId: string;
+    branchId: string;
+  };
 };
 
 @Injectable()
 export class TransactionReceiptDao {
-  constructor(private readonly dao: CentralDao) {}
+  constructor(
+    private readonly dao: CentralDao,
+    private readonly audit: V2AuditService,
+  ) {}
 
   async create(
     input: CreateTransactionReceipt,
     transaction?: DaoTransaction,
   ): Promise<TransactionReceiptEntity> {
-    const executor = transaction ?? this.dao;
+    if (!transaction) {
+      return this.dao.transaction((boundary) => this.create(input, boundary));
+    }
+    const executor = transaction;
     const row = await executor.one<TransactionReceiptRow>(
       `INSERT INTO transaction_receipts (
          transaction_id, storage_object_key, file_name, mime_type,
@@ -48,6 +62,23 @@ export class TransactionReceiptDao {
         input.submittedByUserId,
       ],
     );
+    if (input.audit) {
+      await this.audit.recordWithin(transaction, {
+        actor: input.audit.actor,
+        sessionId: input.audit.sessionId,
+        actionType: 'TRANSACTION_PROOF_UPLOADED',
+        recordType: 'TRANSACTION_RECEIPT',
+        recordId: row.id,
+        businessId: input.audit.businessId,
+        branchId: input.audit.branchId,
+        newValue: {
+          transactionId: input.transactionId,
+          mimeType: input.proof.mimeType,
+          sizeBytes: input.proof.sizeBytes,
+          sha256: input.proof.sha256,
+        },
+      });
+    }
     return this.map(row);
   }
 

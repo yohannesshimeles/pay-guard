@@ -7,6 +7,7 @@ import {
   NotificationDeviceDao, NotificationDeviceOwnershipConflictError,
 } from './notification-device.dao';
 import { NotificationTokenCryptoService } from './notification-token-crypto.service';
+import { auditActorFromPrincipal } from '../audit/v2-audit.service';
 
 @Injectable()
 export class NotificationService {
@@ -35,13 +36,18 @@ export class NotificationService {
   updatePreference(
     actor: AuthenticatedPrincipal, input: UpdateNotificationPreferenceDto,
   ) {
-    return this.notifications.upsertPreference(recipientFor(actor), input);
+    return this.notifications.upsertPreference(recipientFor(actor), input, {
+      actor: auditActorFromPrincipal(actor), sessionId: actor.sessionId,
+    });
   }
 
   async registerDevice(actor: AuthenticatedPrincipal, input: RegisterNotificationDeviceDto) {
     const encrypted = this.tokenCrypto.encrypt(input.token);
     try {
-      return await this.devices.register(recipientFor(actor), input.platform, encrypted);
+      return await this.devices.register(
+        recipientFor(actor), input.platform, encrypted,
+        { actor: auditActorFromPrincipal(actor), sessionId: actor.sessionId },
+      );
     } catch (error) {
       if (error instanceof NotificationDeviceOwnershipConflictError) {
         throw new ConflictException('Notification device cannot be registered');
@@ -51,7 +57,10 @@ export class NotificationService {
   }
 
   async deactivateDevice(actor: AuthenticatedPrincipal, deviceId: string) {
-    const affected = await this.devices.deactivate(recipientFor(actor), deviceId);
+    const affected = await this.devices.deactivate(
+      recipientFor(actor), deviceId,
+      { actor: auditActorFromPrincipal(actor), sessionId: actor.sessionId },
+    );
     if (affected !== 1) throw new NotFoundException('Notification device not found');
     return { id: deviceId, active: false };
   }

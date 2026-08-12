@@ -1,6 +1,7 @@
 import { CentralDao } from '../../src/database/central.dao';
 import { ProofMimeType } from '../../src/qr-processing/enums/proof-mime-type.enum';
 import { TransactionReceiptDao } from '../../src/qr-processing/transaction-receipt.dao';
+import { V2AuditService } from '../../src/audit/v2-audit.service';
 
 const row = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -17,7 +18,10 @@ const row = {
 
 describe('TransactionReceiptDao retention boundaries', () => {
   const many = jest.fn();
-  const dao = new TransactionReceiptDao({ many } as unknown as CentralDao);
+  const dao = new TransactionReceiptDao(
+    { many } as unknown as CentralDao,
+    { recordWithin: jest.fn() } as unknown as V2AuditService,
+  );
 
   beforeEach(() => jest.clearAllMocks());
 

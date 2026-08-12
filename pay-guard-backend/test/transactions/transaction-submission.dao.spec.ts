@@ -1,5 +1,6 @@
 import { CentralDao, DaoTransaction } from '../../src/database/central.dao';
 import { TransactionSubmissionDao } from '../../src/transactions/transaction-submission.dao';
+import { V2AuditService } from '../../src/audit/v2-audit.service';
 
 describe('TransactionSubmissionDao', () => {
   const optional = jest.fn<
@@ -16,9 +17,12 @@ describe('TransactionSubmissionDao', () => {
     [(work: DaoTransaction) => Promise<unknown>]
   >();
   transaction.mockImplementation((work) => work(boundary));
+  const recordWithin = jest.fn().mockResolvedValue(undefined);
   const dao = new TransactionSubmissionDao({
     transaction,
-  } as unknown as CentralDao);
+  } as unknown as CentralDao, {
+    recordWithin,
+  } as unknown as V2AuditService);
   const input = {
     idempotencyKey: '11111111-1111-4111-8111-111111111111',
     settlementAccountId: 'account-id',
@@ -32,6 +36,12 @@ describe('TransactionSubmissionDao', () => {
     branchId: 'branch-id',
     workAssignmentId: 'assignment-id',
     submittedByUserId: 'user-id',
+    actor: {
+      identityType: 'BUSINESS_USER' as const,
+      subjectId: 'user-id', role: 'WAITER' as const,
+      businessId: 'business-id', branchId: 'branch-id',
+    },
+    sessionId: 'session-id',
   };
   const row = {
     id: 'transaction-id',
@@ -65,12 +75,16 @@ describe('TransactionSubmissionDao', () => {
     expect(optional.mock.calls[1][0]).toContain("account.status = 'ACTIVE'");
     expect(optional.mock.calls[1][0]).toContain("assignment.status = 'ACTIVE'");
     expect(execute.mock.calls[0][0]).toContain('TRANSACTION_SUBMITTED');
+    expect(recordWithin).toHaveBeenCalledWith(boundary, expect.objectContaining({
+      actionType: 'TRANSACTION_SUBMITTED', recordId: 'transaction-id',
+    }));
   });
 
   it('returns exact idempotent replay without another history row', async () => {
     optional.mockResolvedValueOnce(row);
     await expect(dao.create(input)).resolves.toMatchObject({ replayed: true });
     expect(execute).not.toHaveBeenCalled();
+    expect(recordWithin).not.toHaveBeenCalled();
   });
 
   it('converts a concurrent insert conflict into an exact replay', async () => {

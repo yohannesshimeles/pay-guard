@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   PutObjectCommand,
   S3Client,
@@ -55,5 +56,13 @@ export class S3ObjectStorageService implements ObjectStoragePort {
     await this.client.send(
       new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     );
+  }
+
+  async getObject(key: string): Promise<Uint8Array> {
+    const response = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+    );
+    if (!response.Body) throw new Error('Object body is unavailable');
+    return response.Body.transformToByteArray();
   }
 }

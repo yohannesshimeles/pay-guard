@@ -35,7 +35,7 @@ describe('ManualDepositAttachmentService', () => {
   >();
   const service = new ManualDepositAttachmentService(
     new ProofFileValidator(), { scan },
-    { putObject, deleteObject, isReady: jest.fn() },
+    { putObject, deleteObject, getObject: jest.fn(), isReady: jest.fn() },
     { transaction } as unknown as CentralDao,
     { attachWithin } as unknown as ManualDepositDao,
   );

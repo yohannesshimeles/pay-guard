@@ -32,6 +32,7 @@ import { LedgerPostingService } from '../../src/ledger/ledger-posting.service';
 import { LedgerEntryType } from '../../src/ledger/ledger-entry-type.enum';
 import { CreditLifecycleService } from '../../src/credits/credit-lifecycle.service';
 import { CentralDao } from '../../src/database/central.dao';
+import { ReportExportDao } from '../../src/reports/report-export.dao';
 import { SubscriptionVerificationDao } from '../../src/subscriptions/subscription-verification.dao';
 import {
   SubscriptionPurchaseDao, SubscriptionPurchaseLockedError,
@@ -41,6 +42,8 @@ import { FraudReviewDao } from '../../src/fraud/fraud-review.dao';
 import {
   RecoveryAuthorizationDao, RecoveryAuthorizationInvalidError,
 } from '../../src/fraud/recovery-authorization.dao';
+import { TransactionReceiptDao } from '../../src/qr-processing/transaction-receipt.dao';
+import { ProofMimeType } from '../../src/qr-processing/enums/proof-mime-type.enum';
 
 const databaseUrl = process.env.TEST_V2_DATABASE_URL;
 const describeWithDatabase = databaseUrl ? describe : describe.skip;
@@ -165,6 +168,10 @@ describeWithDatabase('V2 authentication persistence', () => {
       '039_v2_notification_delivery.sql',
       '040_v2_notification_recipient_matrix.sql',
       '041_v2_financial_notifications.sql',
+      '042_v2_financial_report_index.sql',
+      '043_v2_operational_report_indexes.sql',
+      '044_v2_report_export_lifecycle.sql',
+      '045_v2_audit_query_foundation.sql',
     ]) {
       await pool.query(
         await readFile(
@@ -3276,5 +3283,349 @@ describeWithDatabase('V2 authentication persistence', () => {
     expect(recoveryState.rows[0]).toEqual({
       recovery_status: 'USED', lock_status: 'UNLOCKED', open_flags: '0',
     });
+  });
+
+  it('returns a branch-scoped financial summary with Manual Deposits separate', async () => {
+    const server = app.getHttpAdapter().getInstance();
+    const login = await server.inject({
+      method: 'POST', url: '/api/v1/auth/login',
+      payload: {
+        identity: 'v2-manager@example.test',
+        password: 'V2-Manager-Integration-Password!', devicePlatform: 'web',
+        context: { membershipId, membershipRoleId, workAssignmentId },
+      },
+    });
+    expect(login.statusCode).toBe(201);
+    const auth = responseData<{ accessToken: string }>(login);
+    const response = await server.inject({
+      method: 'GET',
+      url: `/api/v1/businesses/${businessId}/reports/financial-summary` +
+        '?dateFrom=2026-01-01&dateTo=2026-12-31',
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+    });
+    expect(response.statusCode).toBe(200);
+    const report = responseData<{
+      businessId: string; branchId: string; entryCount: number;
+      categories: Array<{ entryType: string; entryCount: number }>;
+    }>(response);
+    expect(report).toMatchObject({ businessId, branchId });
+    expect(report.entryCount).toBeGreaterThan(0);
+    expect(report.categories).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entryType: 'MANUAL_DEPOSIT' }),
+      expect.objectContaining({ entryType: 'VERIFIED_DEPOSIT' }),
+    ]));
+
+    const override = await server.inject({
+      method: 'GET',
+      url: `/api/v1/businesses/${businessId}/reports/financial-summary` +
+        '?dateFrom=2026-01-01&dateTo=2026-12-31' +
+        '&branchId=00000000-0000-4000-8000-000000000001',
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+    });
+    expect(override.statusCode).toBe(403);
+  });
+
+  it('isolates business operations and global provider health reports', async () => {
+    const server = app.getHttpAdapter().getInstance();
+    const managerLogin = await server.inject({
+      method: 'POST', url: '/api/v1/auth/login',
+      payload: {
+        identity: 'v2-manager@example.test',
+        password: 'V2-Manager-Integration-Password!', devicePlatform: 'web',
+        context: { membershipId, membershipRoleId, workAssignmentId },
+      },
+    });
+    const manager = responseData<{ accessToken: string }>(managerLogin);
+    const businessReport = await server.inject({
+      method: 'GET',
+      url: `/api/v1/businesses/${businessId}/reports/operational-summary` +
+        '?dateFrom=2026-01-01&dateTo=2026-12-31',
+      headers: { authorization: `Bearer ${manager.accessToken}` },
+    });
+    expect(businessReport.statusCode).toBe(200);
+    const businessData = responseData<{
+      businessId: string; branchId: string;
+      verification: { statuses: unknown[] };
+      credits: { purchased: string; available: string };
+      subscriptions: { statuses: unknown[] };
+      fraud: { attemptCount: number };
+    }>(businessReport);
+    expect(businessData.businessId).toBe(businessId);
+    expect(businessData.branchId).toBe(branchId);
+    expect(Array.isArray(businessData.verification.statuses)).toBe(true);
+    expect(typeof businessData.credits.purchased).toBe('string');
+    expect(typeof businessData.credits.available).toBe('string');
+    expect(Array.isArray(businessData.subscriptions.statuses)).toBe(true);
+    expect(typeof businessData.fraud.attemptCount).toBe('number');
+
+    const deniedProvider = await server.inject({
+      method: 'GET',
+      url: '/api/v1/platform/reports/provider-summary' +
+        '?dateFrom=2026-08-01&dateTo=2026-08-31',
+      headers: { authorization: `Bearer ${manager.accessToken}` },
+    });
+    expect(deniedProvider.statusCode).toBe(403);
+
+    const adminLogin = await server.inject({
+      method: 'POST', url: '/api/v1/auth/login',
+      payload: {
+        identity: 'v2-admin@example.test',
+        password: 'V2-Admin-Integration-Password!', devicePlatform: 'web',
+      },
+    });
+    const admin = responseData<{ accessToken: string }>(adminLogin);
+    const providerReport = await server.inject({
+      method: 'GET',
+      url: '/api/v1/platform/reports/provider-summary' +
+        '?dateFrom=2026-08-01&dateTo=2026-08-31',
+      headers: { authorization: `Bearer ${admin.accessToken}` },
+    });
+    expect(providerReport.statusCode).toBe(200);
+    const providerData = responseData<{
+      requests: { statuses: unknown[]; operations: unknown[] };
+      responses: { classes: unknown[] };
+      incidents: { open: number; acknowledged: number };
+    }>(providerReport);
+    expect(Array.isArray(providerData.requests.statuses)).toBe(true);
+    expect(Array.isArray(providerData.requests.operations)).toBe(true);
+    expect(Array.isArray(providerData.responses.classes)).toBe(true);
+    expect(typeof providerData.incidents.open).toBe('number');
+    expect(typeof providerData.incidents.acknowledged).toBe('number');
+  });
+
+  it('persists, replays, leases and completes an owner-scoped report export', async () => {
+    const server = app.getHttpAdapter().getInstance();
+    const login = await server.inject({
+      method: 'POST', url: '/api/v1/auth/login',
+      payload: {
+        identity: 'v2-manager@example.test',
+        password: 'V2-Manager-Integration-Password!', devicePlatform: 'web',
+        context: { membershipId, membershipRoleId, workAssignmentId },
+      },
+    });
+    const auth = responseData<{ accessToken: string }>(login);
+    const url = `/api/v1/businesses/${businessId}/reports/exports`;
+    const payload = {
+      idempotencyKey: '91919191-9191-4191-8191-919191919191',
+      reportType: 'FINANCIAL_SUMMARY',
+      dateFrom: '2026-01-01', dateTo: '2026-12-31',
+    };
+    const created = await server.inject({
+      method: 'POST', url, payload,
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+    });
+    expect(created.statusCode).toBe(201);
+    const job = responseData<{
+      id: string; branchId: string; status: string; attemptCount: number;
+    }>(created);
+    expect(job).toMatchObject({
+      branchId, status: 'QUEUED', attemptCount: 0,
+    });
+    const replay = await server.inject({
+      method: 'POST', url, payload,
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+    });
+    expect(responseData<{ id: string }>(replay).id).toBe(job.id);
+
+    const override = await server.inject({
+      method: 'POST', url,
+      payload: {
+        ...payload,
+        idempotencyKey: '92929292-9292-4292-8292-929292929292',
+        branchId: '00000000-0000-4000-8000-000000000001',
+      },
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+    });
+    expect(override.statusCode).toBe(403);
+
+    const exportDao = app.get(ReportExportDao);
+    const claim = await exportDao.claimNext();
+    expect(claim).toMatchObject({
+      jobId: job.id, businessId, branchId, attemptNo: 1,
+    });
+    await exportDao.complete(claim!, {
+      objectKey: `private/report-exports/${businessId}/${job.id}.csv`,
+      fileName: `payguard-financial-summary-${job.id}.csv`,
+      sizeBytes: 20, contentType: 'text/csv; charset=utf-8',
+      sha256: 'a'.repeat(64),
+    });
+    const status = await server.inject({
+      method: 'GET', url: `${url}/${job.id}`,
+      headers: { authorization: `Bearer ${auth.accessToken}` },
+    });
+    expect(responseData<{ status: string; attemptCount: number }>(status))
+      .toMatchObject({ status: 'READY', attemptCount: 1 });
+  });
+
+  it('queries immutable audit records within business, branch and platform scope', async () => {
+    const auditId = deterministicUuid('phase9:audit-query');
+    await pool.query(
+      `INSERT INTO audit_logs (
+         id, user_id, membership_id, role_code, business_id, branch_id,
+         action_type, record_type, record_id, new_value, result, correlation_id
+       ) VALUES ($1,$2,$3,'MANAGER',$4,$5,'AUDIT_QUERY_TEST','CONFIGURATION',$1,
+                 '{"status":"ACTIVE"}'::jsonb,'SUCCESS','phase9-audit-correlation')`,
+      [auditId, userId, membershipId, businessId, branchId],
+    );
+    await expect(pool.query(
+      `UPDATE audit_logs SET result = 'FAILURE' WHERE id = $1`, [auditId],
+    )).rejects.toMatchObject({ code: '55000' });
+    await expect(pool.query(
+      'DELETE FROM audit_logs WHERE id = $1', [auditId],
+    )).rejects.toMatchObject({ code: '55000' });
+
+    const server = app.getHttpAdapter().getInstance();
+    const managerLogin = await server.inject({
+      method: 'POST', url: '/api/v1/auth/login',
+      payload: {
+        identity: 'v2-manager@example.test',
+        password: 'V2-Manager-Integration-Password!', devicePlatform: 'web',
+        context: { membershipId, membershipRoleId, workAssignmentId },
+      },
+    });
+    const manager = responseData<{ accessToken: string }>(managerLogin);
+    const managerSession = await pool.query<{ id: string }>(
+      `SELECT id FROM user_sessions
+       WHERE user_id = $1 AND revoked_at IS NULL
+       ORDER BY login_at DESC LIMIT 1`,
+      [userId],
+    );
+    expect(managerSession.rowCount).toBe(1);
+    const preference = await server.inject({
+      method: 'PATCH', url: '/api/v1/notifications/preferences',
+      headers: { authorization: `Bearer ${manager.accessToken}` },
+      payload: {
+        notificationType: 'TRANSACTION_UPDATE',
+        inAppEnabled: true,
+        pushEnabled: false,
+      },
+    });
+    expect(preference.statusCode).toBe(200);
+    const registeredDevice = await server.inject({
+      method: 'POST', url: '/api/v1/notifications/devices',
+      headers: { authorization: `Bearer ${manager.accessToken}` },
+      payload: {
+        platform: 'web',
+        token: 'phase9-audit-device-token-that-is-never-persisted-in-cleartext',
+      },
+    });
+    expect(registeredDevice.statusCode).toBe(201);
+    const device = responseData<{ id: string }>(registeredDevice);
+    const deactivatedDevice = await server.inject({
+      method: 'DELETE', url: `/api/v1/notifications/devices/${device.id}`,
+      headers: { authorization: `Bearer ${manager.accessToken}` },
+    });
+    expect(deactivatedDevice.statusCode).toBe(200);
+
+    const receiptDao = app.get(TransactionReceiptDao);
+    await receiptDao.create({
+      transactionId: verificationOutcomeTransactionId,
+      submittedByUserId: userId,
+      proof: {
+        objectKey: `private/transaction-receipts/${auditId}.pdf`,
+        fileName: 'phase9-audit-proof.pdf',
+        mimeType: ProofMimeType.PDF,
+        sizeBytes: 128,
+        sha256: createHash('sha256').update('phase9-audit-proof').digest('hex'),
+      },
+      audit: {
+        actor: {
+          identityType: 'BUSINESS_USER', subjectId: userId, role: 'MANAGER',
+          businessId, branchId, membershipId, workAssignmentId,
+        },
+        sessionId: managerSession.rows[0].id, businessId, branchId,
+      },
+    });
+
+    const exportFile = await pool.query<{ id: string; job_id: string }>(
+      `SELECT file.id, file.job_id FROM report_files file
+       JOIN report_generation_jobs job ON job.id = file.job_id
+       WHERE job.business_id = $1 AND job.requested_by_user_id = $2
+       ORDER BY file.created_at DESC LIMIT 1`,
+      [businessId, userId],
+    );
+    expect(exportFile.rowCount).toBe(1);
+    await app.get(ReportExportDao).recordDownload({
+      fileId: exportFile.rows[0].id,
+      jobId: exportFile.rows[0].job_id,
+      userId,
+      businessId,
+      branchId,
+      actor: {
+        identityType: 'BUSINESS_USER', subjectId: userId, role: 'MANAGER',
+        businessId, branchId, membershipId, workAssignmentId,
+      },
+      sessionId: managerSession.rows[0].id,
+    });
+
+    const newlyCovered = await pool.query<{
+      action_type: string; event_count: string;
+    }>(
+      `SELECT action_type, COUNT(*)::text AS event_count
+       FROM audit_logs
+       WHERE action_type = ANY($1::varchar[])
+       GROUP BY action_type ORDER BY action_type`,
+      [[
+        'TRANSACTION_SUBMITTED', 'TRANSACTION_PROOF_UPLOADED',
+        'REPORT_EXPORT_REQUESTED', 'REPORT_EXPORT_DOWNLOADED',
+        'NOTIFICATION_PREFERENCE_UPDATED', 'NOTIFICATION_DEVICE_REGISTERED',
+        'NOTIFICATION_DEVICE_DEACTIVATED',
+      ]],
+    );
+    expect(newlyCovered.rows.map((row) => row.action_type)).toEqual([
+      'NOTIFICATION_DEVICE_DEACTIVATED',
+      'NOTIFICATION_DEVICE_REGISTERED',
+      'NOTIFICATION_PREFERENCE_UPDATED',
+      'REPORT_EXPORT_DOWNLOADED',
+      'REPORT_EXPORT_REQUESTED',
+      'TRANSACTION_PROOF_UPLOADED',
+      'TRANSACTION_SUBMITTED',
+    ]);
+    expect(newlyCovered.rows.every((row) => Number(row.event_count) >= 1)).toBe(true);
+
+    const businessAudit = await server.inject({
+      method: 'GET',
+      url: `/api/v1/businesses/${businessId}/audit-logs?actionType=AUDIT_QUERY_TEST`,
+      headers: { authorization: `Bearer ${manager.accessToken}` },
+    });
+    expect(businessAudit.statusCode).toBe(200);
+    const businessData = responseData<{
+      items: Array<{
+        id: string; branchId: string; correlationId: string;
+        newValue: { status: string };
+      }>;
+      total: number;
+    }>(businessAudit);
+    expect(businessData.total).toBe(1);
+    expect(businessData.items[0]).toMatchObject({
+      id: auditId, branchId, correlationId: 'phase9-audit-correlation',
+      newValue: { status: 'ACTIVE' },
+    });
+
+    const override = await server.inject({
+      method: 'GET',
+      url: `/api/v1/businesses/${businessId}/audit-logs` +
+        '?branchId=00000000-0000-4000-8000-000000000001',
+      headers: { authorization: `Bearer ${manager.accessToken}` },
+    });
+    expect(override.statusCode).toBe(403);
+
+    const adminLogin = await server.inject({
+      method: 'POST', url: '/api/v1/auth/login',
+      payload: {
+        identity: 'v2-admin@example.test',
+        password: 'V2-Admin-Integration-Password!', devicePlatform: 'web',
+      },
+    });
+    const admin = responseData<{ accessToken: string }>(adminLogin);
+    const platformAudit = await server.inject({
+      method: 'GET',
+      url: `/api/v1/platform/audit-logs?businessId=${businessId}` +
+        '&actionType=AUDIT_QUERY_TEST',
+      headers: { authorization: `Bearer ${admin.accessToken}` },
+    });
+    expect(platformAudit.statusCode).toBe(200);
+    expect(responseData<{ items: Array<{ id: string }> }>(platformAudit).items)
+      .toEqual([expect.objectContaining({ id: auditId })]);
   });
 });

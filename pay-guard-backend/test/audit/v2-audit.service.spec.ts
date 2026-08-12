@@ -2,7 +2,9 @@ import { V2AuditService } from '../../src/audit/v2-audit.service';
 import { DatabaseService } from '../../src/database/database.service';
 
 describe('V2AuditService', () => {
-  const database = { query: jest.fn() };
+  const database = {
+    query: jest.fn<Promise<{ rowCount: number }>, [string, readonly unknown[]]>(),
+  };
   const service = new V2AuditService(database as unknown as DatabaseService);
 
   beforeEach(() => {
@@ -41,6 +43,7 @@ describe('V2AuditService', () => {
       null,
       'SUCCESS',
       null,
+      'system',
     ]);
   });
 
@@ -73,6 +76,30 @@ describe('V2AuditService', () => {
       'admin-session-1',
       'SUCCESS',
       null,
+      'system',
     ]);
+  });
+
+  it('persists correlation and redacts secret metadata', async () => {
+    const { requestContext } = await import('../../src/common/request-context');
+    await requestContext.run({ correlationId: 'audit-test-correlation' }, () =>
+      service.record({
+        actor: {
+          identityType: 'BUSINESS_USER', subjectId: 'user-1', role: 'MANAGER',
+          businessId: 'business-1', membershipId: 'membership-1',
+        },
+        actionType: 'CONFIG_CHANGED',
+        recordType: 'CONFIGURATION',
+        newValue: { apiKey: 'secret-value', enabled: true },
+        reason: 'Bearer highly-sensitive-token',
+      }),
+    );
+
+    const values = database.query.mock.calls[0][1];
+    expect(JSON.parse(values[10] as string)).toEqual({
+      apiKey: '[REDACTED]', enabled: true,
+    });
+    expect(values[11]).toBe('[REDACTED]');
+    expect(values[16]).toBe('audit-test-correlation');
   });
 });

@@ -82,6 +82,11 @@
       "type": "string"
     },
     {
+      "key": "jobId",
+      "value": "replace-jobId",
+      "type": "string"
+    },
+    {
       "key": "notificationId",
       "value": "replace-notificationId",
       "type": "string"
@@ -118,6 +123,90 @@
     }
   ],
   "item": [
+    {
+      "name": "Audit",
+      "item": [
+        {
+          "name": "BusinessAudit_list",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/businesses/{{businessId}}/audit-logs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "businesses",
+                "{{businessId}}",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "00000000-0000-4000-8000-000000000001",
+                  "disabled": true
+                },
+                {
+                  "key": "businessId",
+                  "value": "00000000-0000-4000-8000-000000000001",
+                  "disabled": true
+                },
+                {
+                  "key": "actionType",
+                  "value": "string",
+                  "disabled": true
+                },
+                {
+                  "key": "recordType",
+                  "value": "string",
+                  "disabled": true
+                },
+                {
+                  "key": "result",
+                  "value": "SUCCESS",
+                  "disabled": true
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "string",
+                  "disabled": true
+                },
+                {
+                  "key": "dateTo",
+                  "value": "string",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": false
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
     {
       "name": "Authentication",
       "item": [
@@ -2190,6 +2279,89 @@
       ]
     },
     {
+      "name": "Platform Audit",
+      "item": [
+        {
+          "name": "PlatformAudit_list",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/platform/audit-logs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "platform",
+                "audit-logs"
+              ],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "00000000-0000-4000-8000-000000000001",
+                  "disabled": true
+                },
+                {
+                  "key": "businessId",
+                  "value": "00000000-0000-4000-8000-000000000001",
+                  "disabled": true
+                },
+                {
+                  "key": "actionType",
+                  "value": "string",
+                  "disabled": true
+                },
+                {
+                  "key": "recordType",
+                  "value": "string",
+                  "disabled": true
+                },
+                {
+                  "key": "result",
+                  "value": "SUCCESS",
+                  "disabled": true
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "string",
+                  "disabled": true
+                },
+                {
+                  "key": "dateTo",
+                  "value": "string",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": false
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Platform Fraud Reviews",
       "item": [
         {
@@ -2529,6 +2701,55 @@
       ]
     },
     {
+      "name": "Platform Reports",
+      "item": [
+        {
+          "name": "PlatformReports_providerSummary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/platform/reports/provider-summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "platform",
+                "reports",
+                "provider-summary"
+              ],
+              "query": [
+                {
+                  "key": "dateFrom",
+                  "value": "string",
+                  "disabled": false
+                },
+                {
+                  "key": "dateTo",
+                  "value": "string",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Receipt Review Queue",
       "item": [
         {
@@ -2760,6 +2981,237 @@
                 "receipt-review-queue",
                 "{{caseId}}",
                 "resolve"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Reports_financialSummary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/businesses/{{businessId}}/reports/financial-summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "businesses",
+                "{{businessId}}",
+                "reports",
+                "financial-summary"
+              ],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "00000000-0000-4000-8000-000000000001",
+                  "disabled": true
+                },
+                {
+                  "key": "settlementAccountId",
+                  "value": "00000000-0000-4000-8000-000000000001",
+                  "disabled": true
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "string",
+                  "disabled": false
+                },
+                {
+                  "key": "dateTo",
+                  "value": "string",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reports_operationalSummary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/businesses/{{businessId}}/reports/operational-summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "businesses",
+                "{{businessId}}",
+                "reports",
+                "operational-summary"
+              ],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "00000000-0000-4000-8000-000000000001",
+                  "disabled": true
+                },
+                {
+                  "key": "dateFrom",
+                  "value": "string",
+                  "disabled": false
+                },
+                {
+                  "key": "dateTo",
+                  "value": "string",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reports_createExport",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "disabled": false,
+                "description": "Generated from the OpenAPI request body."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idempotencyKey\": \"00000000-0000-4000-8000-000000000001\",\n  \"reportType\": \"FINANCIAL_SUMMARY\",\n  \"dateFrom\": \"string\",\n  \"dateTo\": \"string\",\n  \"branchId\": \"00000000-0000-4000-8000-000000000001\",\n  \"settlementAccountId\": \"00000000-0000-4000-8000-000000000001\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/businesses/{{businessId}}/reports/exports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "businesses",
+                "{{businessId}}",
+                "reports",
+                "exports"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reports_requireExport",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/businesses/{{businessId}}/reports/exports/{{jobId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "businesses",
+                "{{businessId}}",
+                "reports",
+                "exports",
+                "{{jobId}}"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Reports_downloadExport",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/businesses/{{businessId}}/reports/exports/{{jobId}}/download",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "businesses",
+                "{{businessId}}",
+                "reports",
+                "exports",
+                "{{jobId}}",
+                "download"
               ],
               "query": []
             }

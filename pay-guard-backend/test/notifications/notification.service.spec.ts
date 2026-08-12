@@ -13,8 +13,8 @@ describe('NotificationService', () => {
   const list = jest.fn();
   const markRead = jest.fn();
   const preferences = jest.fn();
-  const upsertPreference = jest.fn();
-  const register = jest.fn();
+  const upsertPreference = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>();
+  const register = jest.fn<Promise<unknown>, [unknown, unknown, unknown, unknown]>();
   const deactivate = jest.fn();
   const encrypt = jest.fn();
   const service = new NotificationService({
@@ -70,7 +70,15 @@ describe('NotificationService', () => {
     expect(upsertPreference).toHaveBeenCalledWith(
       { identityType: 'PLATFORM_ADMIN', id: 'admin-id' },
       { notificationType: 'FRAUD_ALERT', inAppEnabled: true, pushEnabled: false },
+      expect.any(Object),
     );
+    const preferenceAudit = upsertPreference.mock.calls[0][2] as {
+      sessionId: string; actor: { identityType: string; subjectId: string };
+    };
+    expect(preferenceAudit).toMatchObject({
+      sessionId: 'admin-session',
+      actor: { identityType: 'PLATFORM_ADMIN', subjectId: 'admin-id' },
+    });
   });
 
   it('encrypts a push token before handing it to persistence', async () => {
@@ -84,7 +92,15 @@ describe('NotificationService', () => {
     expect(register).toHaveBeenCalledWith(
       { identityType: 'BUSINESS_USER', id: 'user-id' }, 'android',
       { ciphertext: 'ciphertext', iv: 'iv', authTag: 'tag', fingerprint: 'hash' },
+      expect.any(Object),
     );
+    const deviceAudit = register.mock.calls[0][3] as {
+      sessionId: string; actor: { subjectId: string; role: string };
+    };
+    expect(deviceAudit).toMatchObject({
+      sessionId: 'session-id',
+      actor: { subjectId: 'user-id', role: 'WAITER' },
+    });
   });
 
   it('does not disclose or reassign a token owned by another identity', async () => {

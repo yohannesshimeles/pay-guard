@@ -503,37 +503,55 @@ Completion:
 
 Implementation:
 
-- [ ] Implement all PDF-listed verification, financial, credit, subscription,
+- [x] Implement all PDF-listed verification, financial, credit, subscription,
       provider and fraud reports.
-- [ ] Keep Manual Deposit a separate financial category.
-- [ ] Apply role/business/branch scope to data and exports.
-- [ ] Run large exports as background jobs.
+  - [x] Implement the bounded financial-summary report over immutable ledger entries.
+  - [x] Implement branch-scoped verification, credit, subscription and fraud summaries.
+  - [x] Implement a sanitized Platform Super Admin provider-health summary.
+- [x] Keep Manual Deposit a separate financial category.
+- [x] Apply role/business/branch scope to data and exports.
+  - [x] Enforce authenticated business and branch scope for financial summaries.
+  - [x] Enforce authenticated business/branch scope for operational summaries and
+        isolate global provider health to Platform Super Admins.
+- [x] Run large exports as background jobs.
 
 Expected:
 
-- [ ] Dashboard and export totals match source transactions/ledger.
-- [ ] Export cannot broaden the caller's scope.
+- [x] Dashboard and export totals match source transactions/ledger.
+  - [x] Financial-summary totals are calculated directly by PostgreSQL from scoped
+        ledger rows and preserve every entry category.
+- [x] Export cannot broaden the caller's scope.
 
 Completion:
 
 - [ ] Report reconciliation, permission and load tests pass.
+  - [x] Report/export reconciliation and permission tests pass.
+  - [ ] Report and export load thresholds pass under production-sized data.
 
 ## Phase 9 - Audit module
 
 Implementation:
 
 - [ ] Record every PDF-listed identity, configuration, verification, subscription,
-      credit, financial, reconciliation, fraud and security event.
-- [ ] Store safe actor, scope, time, before/after metadata and correlation.
-- [ ] Prevent application users from altering audit records.
+      credit, financial, reconciliation, fraud and security event. Increment 2 closes
+      the implemented authenticated mutation surface; provider/report background
+      system events and future password/role/archive endpoints remain.
+- [x] Store safe actor, scope, time, before/after metadata and correlation. Increment 1
+      adds recursive secret redaction, bounded metadata/text and request correlation.
+- [x] Prevent application users from altering audit records. PostgreSQL rejects update
+      and delete with SQLSTATE 55000, verified against the clean V2 integration schema.
 
 Expected:
 
-- [ ] Investigators can reconstruct decisions without exposing secrets.
+- [x] Investigators can query ordered, paginated decision metadata without exposing
+      configured secret-key fields, bearer credentials or JWT-shaped values. Business
+      queries enforce selected tenant/branch context; platform queries require the
+      isolated Platform Super Admin identity.
 
 Completion:
 
-- [ ] Audit coverage matrix has no missing sensitive action.
+- [ ] Audit coverage matrix has no missing sensitive action. The matrix now exists and
+      identifies only background system lifecycle and future-module gaps.
 
 ## Phase 9 - Archive module
 

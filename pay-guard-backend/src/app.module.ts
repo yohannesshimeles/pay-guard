@@ -26,6 +26,8 @@ import { CreditModule } from './credits/credit.module';
 import { SubscriptionModule } from './subscriptions/subscription.module';
 import { FraudModule } from './fraud/fraud.module';
 import { NotificationModule } from './notifications/notification.module';
+import { ReportsModule } from './reports/reports.module';
+import { AuditQueryModule } from './audit/audit-query.module';
 
 @Module({
   imports: [
@@ -35,6 +37,7 @@ import { NotificationModule } from './notifications/notification.module';
     ObservabilityModule,
     AuditModule,
     AuthModule,
+    AuditQueryModule,
     HealthModule,
     BusinessesModule,
     BranchesModule,
@@ -53,6 +56,7 @@ import { NotificationModule } from './notifications/notification.module';
     SubscriptionModule,
     FraudModule,
     NotificationModule,
+    ReportsModule,
   ],
 })
 export class AppModule implements NestModule {

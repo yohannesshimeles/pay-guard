@@ -106,6 +106,246 @@
         ]
       }
     },
+    "/api/v1/businesses/{businessId}/audit-logs": {
+      "get": {
+        "operationId": "BusinessAudit_list",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "businessId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "actionType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 60,
+              "pattern": "^[A-Z0-9_]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "recordType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 60,
+              "pattern": "^[A-Z0-9_]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "result",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SUCCESS",
+                "FAILURE"
+              ]
+            }
+          },
+          {
+            "name": "dateFrom",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Object"
+                }
+              ]
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Object"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Audit"
+        ]
+      }
+    },
+    "/api/v1/platform/audit-logs": {
+      "get": {
+        "operationId": "PlatformAudit_list",
+        "parameters": [
+          {
+            "name": "branchId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "businessId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "actionType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 60,
+              "pattern": "^[A-Z0-9_]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "recordType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 60,
+              "pattern": "^[A-Z0-9_]+$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "result",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SUCCESS",
+                "FAILURE"
+              ]
+            }
+          },
+          {
+            "name": "dateFrom",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Object"
+                }
+              ]
+            }
+          },
+          {
+            "name": "offset",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "minimum": 0,
+              "maximum": 10000,
+              "default": 0,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Object"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Platform Audit"
+        ]
+      }
+    },
     "/health/live": {
       "get": {
         "operationId": "Health_live",
@@ -3637,6 +3877,267 @@
           "Subscription Recovery"
         ]
       }
+    },
+    "/api/v1/businesses/{businessId}/reports/financial-summary": {
+      "get": {
+        "operationId": "Reports_financialSummary",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "settlementAccountId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFrom",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/reports/operational-summary": {
+      "get": {
+        "operationId": "Reports_operationalSummary",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateFrom",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/reports/exports": {
+      "post": {
+        "operationId": "Reports_createExport",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReportExportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/reports/exports/{jobId}": {
+      "get": {
+        "operationId": "Reports_requireExport",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/businesses/{businessId}/reports/exports/{jobId}/download": {
+      "get": {
+        "operationId": "Reports_downloadExport",
+        "parameters": [
+          {
+            "name": "businessId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/api/v1/platform/reports/provider-summary": {
+      "get": {
+        "operationId": "PlatformReports_providerSummary",
+        "parameters": [
+          {
+            "name": "dateFrom",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "dateTo",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "Platform Reports"
+        ]
+      }
     }
   },
   "info": {
@@ -3740,6 +4241,10 @@
         "required": [
           "refreshToken"
         ]
+      },
+      "Object": {
+        "type": "object",
+        "properties": {}
       },
       "RegisterBusinessDto": {
         "type": "object",
@@ -4102,10 +4607,6 @@
             }
           }
         }
-      },
-      "Object": {
-        "type": "object",
-        "properties": {}
       },
       "UpdateNotificationPreferenceDto": {
         "type": "object",
@@ -4567,6 +5068,42 @@
         },
         "required": [
           "authorizationCode"
+        ]
+      },
+      "CreateReportExportDto": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reportType": {
+            "type": "string",
+            "enum": [
+              "FINANCIAL_SUMMARY",
+              "OPERATIONAL_SUMMARY"
+            ]
+          },
+          "dateFrom": {
+            "type": "string"
+          },
+          "dateTo": {
+            "type": "string"
+          },
+          "branchId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "settlementAccountId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "reportType",
+          "dateFrom",
+          "dateTo"
         ]
       }
     }

@@ -24,6 +24,7 @@ import { QR_DECODER, QrDecoderPort } from './ports/qr-decoder.port';
 import { ProofFileValidator } from './proof-file.validator';
 import { TransactionReceiptDao } from './transaction-receipt.dao';
 import { QrPayloadParserService } from './qr-payload-parser.service';
+import { V2SelectedAuthContext } from '../auth/v2-auth.types';
 
 const extensionByMimeType: Record<ProofMimeType, string> = {
   [ProofMimeType.JPEG]: 'jpg',
@@ -81,6 +82,12 @@ export class ProofIntakeService {
     transactionId: string,
     submittedByUserId: string,
     inspected: InspectedProofModel,
+    audit?: {
+      actor: V2SelectedAuthContext;
+      sessionId: string;
+      businessId: string;
+      branchId: string;
+    },
   ) {
     const objectKey = this.privateObjectKey(inspected.file.mimeType);
     await this.storage.putObject(
@@ -101,6 +108,7 @@ export class ProofIntakeService {
         transactionId,
         submittedByUserId,
         proof,
+        audit,
       });
     } catch (error) {
       await this.storage.deleteObject(objectKey).catch(() => {

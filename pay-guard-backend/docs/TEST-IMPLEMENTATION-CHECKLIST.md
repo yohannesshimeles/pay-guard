@@ -112,6 +112,32 @@ Source authority: Revised Compiled Project Plan, Version 2.0, July 2026.
 
 ## Security, load and operations
 
+- [x] Report summaries reconcile to scoped PostgreSQL sources and keep Manual Deposit
+      separate from verified payments.
+- [x] Export requests cannot broaden selected business/branch context, are isolated to
+      the requester and expose no private storage key.
+- [x] Export worker lease, retry, checksum, CSV injection, expiry and download-history
+      unit/integration checks pass.
+- [ ] Production-sized report/export load thresholds are exercised.
+
+## Phase 9 audit acceptance
+
+- [x] PostgreSQL rejects update and delete against immutable `audit_logs` records.
+- [x] Business audit queries enforce membership and selected Manager branch scope;
+      query parameters cannot broaden tenant or branch access.
+- [x] Platform audit queries require the isolated Platform Super Admin identity.
+- [x] Audit writes persist correlation, actor, session, scope, result and bounded
+      before/after metadata.
+- [x] Sensitive metadata keys, bearer credentials and JWT-shaped values are redacted.
+- [x] Audit filters are validated and pagination/range limits are bounded.
+- [x] 94 unit suites / 454 tests and 27 PostgreSQL V2 integration tests pass for
+      Audit increment 1 with migration 045 included in clean test setup.
+- [ ] Audit coverage matrix has no missing sensitive action.
+  - [x] Implemented authenticated transaction, proof, report-export,
+        notification-preference and notification-device gaps are covered atomically.
+  - [x] PostgreSQL integration verifies all seven Increment 2 action types.
+  - [ ] Background provider/report system lifecycle gaps are covered.
+
 - [ ] RBAC matrix and IDOR tests for every query/mutation/export.
 - [ ] Session refresh rotation, revocation and replaced-device behavior.
 - [ ] Secret/account/password/raw-payload leakage scan across logs and errors.
