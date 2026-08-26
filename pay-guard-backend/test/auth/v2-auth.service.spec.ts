@@ -92,6 +92,7 @@ describe('V2AuthService', () => {
     passwords.verify.mockResolvedValue(true);
     sessions.createBusinessSession.mockResolvedValue({
       sessionId: 'session-1',
+      replacedSessionIds: [],
     });
     sessions.revoke.mockResolvedValue(true);
     jwt.signAsync.mockResolvedValue('access-token');
@@ -144,6 +145,36 @@ describe('V2AuthService', () => {
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ actionType: 'AUTH_LOGIN' }),
     );
+  });
+
+  it('audits automatic Waiter device replacement', async () => {
+    identities.findIdentity.mockResolvedValueOnce({
+      id: 'user-1', identityType: 'BUSINESS_USER', passwordHash: 'hash',
+      status: 'ACTIVE',
+      contexts: [{
+        membershipId: 'membership-1', membershipRoleId: 'waiter-role',
+        role: 'WAITER', businessId: 'business-1',
+        workAssignmentId: 'waiter-assignment', workScope: 'BRANCH',
+        branchId: 'branch-1',
+      }],
+    });
+    sessions.createBusinessSession.mockResolvedValueOnce({
+      sessionId: 'session-2', replacedSessionIds: ['session-1'],
+    });
+
+    await service.login({
+      identity: 'waiter@example.test', password: 'correct-password',
+      context: {
+        membershipId: 'membership-1', membershipRoleId: 'waiter-role',
+        workAssignmentId: 'waiter-assignment',
+      },
+      devicePlatform: 'ios',
+    });
+
+    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'AUTH_DEVICE_REPLACED', recordId: 'session-2',
+      previousValue: { activeSessionCount: 1 },
+    }));
   });
 
   it('revokes the new session if mandatory audit persistence fails', async () => {

@@ -2,7 +2,9 @@ import {
   Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown,
 } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '../config/app-config';
+import { resolvePublicError } from '../common/error-contract';
 import { ReportExportWorker } from './report-export.worker';
+import { MetricsService } from '../observability/metrics.service';
 
 @Injectable()
 export class ReportExportWorkerRunner
@@ -14,6 +16,7 @@ implements OnApplicationBootstrap, OnApplicationShutdown {
 
   constructor(
     private readonly worker: ReportExportWorker,
+    private readonly metrics: MetricsService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -39,10 +42,16 @@ implements OnApplicationBootstrap, OnApplicationShutdown {
     this.active = true;
     try {
       for (let count = 0; count < 10; count += 1) {
-        if (await this.worker.processNext() === 'IDLE') break;
+        const result = await this.worker.processNext();
+        this.metrics.workerResults.inc({ worker: 'report_export', outcome: result });
+        if (result === 'IDLE') break;
       }
-    } catch {
-      this.logger.error(JSON.stringify({ event: 'report_export.worker_tick_failed' }));
+    } catch (error) {
+      this.metrics.workerTickFailures.inc({ worker: 'report_export' });
+      this.logger.error(JSON.stringify({
+        event: 'report_export.worker_tick_failed',
+        error: resolvePublicError(error, 500, undefined),
+      }));
     } finally {
       this.active = false;
       if (!this.stopped) this.schedule(this.config.notificationWorkerPollMs);

@@ -79,7 +79,7 @@ export class V2AuthService {
     const deviceIdentifierHash = input.deviceIdentifier
       ? this.hashToken(input.deviceIdentifier)
       : undefined;
-    const sessionId = await this.createSession({
+    const { sessionId, replacedSessionIds } = await this.createSession({
       context: selected.context,
       refreshTokenHash,
       expiresAt,
@@ -98,6 +98,18 @@ export class V2AuthService {
         recordId: sessionId,
         newValue: { devicePlatform: input.devicePlatform ?? null },
       });
+      if (replacedSessionIds.length > 0) {
+        await this.audit.record({
+          actor: selected.context,
+          sessionId,
+          actionType: 'AUTH_DEVICE_REPLACED',
+          recordType: 'SESSION',
+          recordId: sessionId,
+          previousValue: { activeSessionCount: replacedSessionIds.length },
+          newValue: { devicePlatform: input.devicePlatform ?? null },
+          reason: 'New Waiter device login',
+        });
+      }
       return {
         status: 'AUTHENTICATED',
         ...tokenPair,
@@ -205,7 +217,7 @@ export class V2AuthService {
     expiresAt: Date;
     deviceIdentifierHash?: string;
     devicePlatform?: 'web' | 'android' | 'ios';
-  }): Promise<string> {
+  }): Promise<{ sessionId: string; replacedSessionIds: string[] }> {
     if (input.context.identityType === 'PLATFORM_ADMIN') {
       const session = await this.sessions.createPlatformAdminSession({
         platformAdminId: input.context.subjectId,
@@ -214,13 +226,13 @@ export class V2AuthService {
         deviceIdentifierHash: input.deviceIdentifierHash,
         devicePlatform: input.devicePlatform,
       });
-      return session.sessionId;
+      return { sessionId: session.sessionId, replacedSessionIds: [] };
     }
 
     if (!input.context.membershipId || !input.context.membershipRoleId) {
       throw new UnauthorizedException('Authorization context is invalid');
     }
-    const session = await this.sessions.createBusinessSession({
+    return this.sessions.createBusinessSession({
       userId: input.context.subjectId,
       membershipId: input.context.membershipId,
       membershipRoleId: input.context.membershipRoleId,
@@ -230,7 +242,6 @@ export class V2AuthService {
       deviceIdentifierHash: input.deviceIdentifierHash,
       devicePlatform: input.devicePlatform,
     });
-    return session.sessionId;
   }
 
   private contextFromSession(session: V2Session): V2SelectedAuthContext {

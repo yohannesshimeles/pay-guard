@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CentralDao, DaoTransaction } from '../database/central.dao';
+import { V2AuditService } from '../audit/v2-audit.service';
 import { hashVerifyEtPayload } from './verify-et-payload-hash';
 
 export const VERIFYET_OPERATIONS = [
@@ -97,7 +98,10 @@ export class VerifyEtIdempotencyConflictError extends Error {
 
 @Injectable()
 export class VerifyEtRequestHistoryDao {
-  constructor(private readonly dao: CentralDao) {}
+  constructor(
+    private readonly dao: CentralDao,
+    private readonly audit: V2AuditService,
+  ) {}
 
   reserve(
     input: ReserveVerifyEtRequest,
@@ -124,8 +128,15 @@ export class VerifyEtRequestHistoryDao {
           input.amountEtb ?? null,
         ],
       );
-      if (inserted)
+      if (inserted) {
+        await this.audit.recordSystemWithin(transaction, {
+          actionType: 'PROVIDER_REQUEST_RESERVED',
+          recordType: 'VERIFYET_PROVIDER_REQUEST', recordId: inserted.id,
+          newValue: { verificationAttemptId: inserted.verification_attempt_id,
+            operation: inserted.operation, requestHash: inserted.request_hash },
+        });
         return { record: this.mapRequest(inserted), replayed: false };
+      }
 
       const existing = await transaction.one<RequestRow>(
         `SELECT * FROM verifyet_provider_requests
@@ -164,32 +175,49 @@ export class VerifyEtRequestHistoryDao {
           input.errorCode ?? null,
         ],
       );
-      await this.updateCompletion(transaction, input);
+      const request = await this.updateCompletion(transaction, input);
+      await this.audit.recordSystemWithin(transaction, {
+        actionType: input.succeeded
+          ? 'PROVIDER_REQUEST_SUCCEEDED' : 'PROVIDER_REQUEST_FAILED',
+        recordType: 'VERIFYET_PROVIDER_REQUEST', recordId: request.id,
+        result: input.succeeded ? 'SUCCESS' : 'FAILURE',
+        failureReason: input.succeeded ? undefined : input.errorCode,
+        newValue: { operation: request.operation, httpStatus: input.httpStatus,
+          providerStatus: input.providerStatus, responseHash,
+          attemptCount: request.attempt_count },
+      });
       return this.mapResponse(response);
     });
   }
 
-  async markSent(requestRecordId: string): Promise<VerifyEtRequestRecord> {
-    const row = await this.dao.one<RequestRow>(
-      `UPDATE verifyet_provider_requests
-       SET request_status = 'SENT',
-           attempt_count = attempt_count + 1,
-           sent_at = COALESCE(sent_at, now()),
-           completed_at = NULL,
-           last_error_code = NULL
-       WHERE id = $1
-         AND request_status IN ('RESERVED','SENT','FAILED')
-       RETURNING *`,
-      [requestRecordId],
-    );
-    return this.mapRequest(row);
+  markSent(requestRecordId: string): Promise<VerifyEtRequestRecord> {
+    return this.dao.transaction(async (transaction) => {
+      const row = await transaction.one<RequestRow>(
+        `UPDATE verifyet_provider_requests
+         SET request_status = 'SENT',
+             attempt_count = attempt_count + 1,
+             sent_at = COALESCE(sent_at, now()),
+             completed_at = NULL,
+             last_error_code = NULL
+         WHERE id = $1
+           AND request_status IN ('RESERVED','SENT','FAILED')
+         RETURNING *`,
+        [requestRecordId],
+      );
+      await this.audit.recordSystemWithin(transaction, {
+        actionType: 'PROVIDER_REQUEST_SENT',
+        recordType: 'VERIFYET_PROVIDER_REQUEST', recordId: row.id,
+        newValue: { operation: row.operation, attemptCount: row.attempt_count },
+      });
+      return this.mapRequest(row);
+    });
   }
 
   private async updateCompletion(
     transaction: DaoTransaction,
     input: CompleteVerifyEtRequest,
-  ): Promise<void> {
-    await transaction.one<RequestRow>(
+  ): Promise<RequestRow> {
+    return transaction.one<RequestRow>(
       `UPDATE verifyet_provider_requests
        SET request_status = $2,
            provider_request_id = COALESCE(provider_request_id, $3),

@@ -3,6 +3,7 @@ import { CentralDao, DaoTransaction } from '../database/central.dao';
 import { PendingRecheckEntity } from './entities/pending-recheck.entity';
 import { CustomerTransactionStatus } from './enums/customer-transaction-status.enum';
 import { PendingRecheckStatus } from './enums/pending-recheck-status.enum';
+import { V2AuditService } from '../audit/v2-audit.service';
 
 type PendingRecheckRow = {
   id: string;
@@ -49,7 +50,10 @@ export class PendingRecheckClaimLostError extends Error {
 
 @Injectable()
 export class PendingRecheckDao {
-  constructor(private readonly dao: CentralDao) {}
+  constructor(
+    private readonly dao: CentralDao,
+    private readonly audit: V2AuditService,
+  ) {}
 
   schedule(input: SchedulePendingRecheck): Promise<PendingRecheckEntity> {
     this.validateSchedule(input);
@@ -202,6 +206,9 @@ export class PendingRecheckDao {
        claimed_at = NULL,
        claim_expires_at = NULL`,
       [scheduledAt, errorCode],
+      { actionType: 'PROVIDER_RETRY_SCHEDULED', result: 'FAILURE',
+        failureReason: errorCode,
+        value: { scheduledAt, errorCode } },
     );
   }
 
@@ -227,6 +234,10 @@ export class PendingRecheckDao {
        claimed_at = NULL,
        claim_expires_at = NULL`,
       [status, reasonCode],
+      { actionType: status === PendingRecheckStatus.PAUSED_PROVIDER
+        ? 'PROVIDER_RECHECK_PAUSED' : 'VERIFICATION_RECHECK_PAUSED',
+        result: 'FAILURE', failureReason: reasonCode,
+        value: { status, reasonCode } },
     );
   }
 
@@ -235,19 +246,33 @@ export class PendingRecheckDao {
     claimToken: string,
     assignments: string,
     values: readonly unknown[],
+    auditEvent?: {
+      actionType: string; result: 'SUCCESS' | 'FAILURE';
+      failureReason?: string; value: Record<string, unknown>;
+    },
   ): Promise<PendingRecheckEntity> {
-    const row = await this.dao.optional<PendingRecheckRow>(
-      `UPDATE pending_rechecks recheck
-       SET ${assignments}
-       WHERE id = $1
-         AND claim_token = $2
-         AND status = 'CLAIMED'
-         AND claim_expires_at > now()
-       RETURNING ${this.returningColumns('recheck')}`,
-      [recheckId, claimToken, ...values],
-    );
-    if (!row) throw new PendingRecheckClaimLostError();
-    return this.map(row);
+    return this.dao.transaction(async (transaction) => {
+      const row = await transaction.optional<PendingRecheckRow>(
+        `UPDATE pending_rechecks recheck
+         SET ${assignments}
+         WHERE id = $1
+           AND claim_token = $2
+           AND status = 'CLAIMED'
+           AND claim_expires_at > now()
+         RETURNING ${this.returningColumns('recheck')}`,
+        [recheckId, claimToken, ...values],
+      );
+      if (!row) throw new PendingRecheckClaimLostError();
+      if (auditEvent) await this.audit.recordSystemWithin(transaction, {
+        actionType: auditEvent.actionType, recordType: 'PENDING_RECHECK',
+        recordId: row.id, businessId: row.business_id,
+        branchId: row.branch_id, result: auditEvent.result,
+        failureReason: auditEvent.failureReason,
+        newValue: { transactionId: row.transaction_id,
+          recheckNumber: row.recheck_number, ...auditEvent.value },
+      });
+      return this.map(row);
+    });
   }
 
   private async requireByIdentityWithin(

@@ -4,6 +4,7 @@ import { PendingRecheckDao } from '../../src/verifications/pending-recheck.dao';
 import { PendingRecheckCoordinatorService } from '../../src/verifications/pending-recheck-coordinator.service';
 import { VerificationOutcomeService } from '../../src/verifications/verification-outcome.service';
 import { VerifiedPaymentPostingService } from '../../src/verifications/verified-payment-posting.service';
+import { VerificationRecheckCreditEventMissingError } from '../../src/verifications/verification-credit-eligibility.dao';
 import { UnconfiguredVerifyEtProviderAdapter } from '../../src/verify-et/verify-et-provider.adapter';
 import { VerifyEtOperationalAlertDao } from '../../src/verify-et/verify-et-operational-alert.dao';
 import { VerifyEtPollingPolicyService } from '../../src/verify-et/verify-et-polling-policy.service';
@@ -106,6 +107,26 @@ describe('VerifyEtWorkerService', () => {
     expect(() => adapter.verify()).toThrow('transport is not configured');
   });
 
+  it('quarantines a recheck whose initial credit event is missing', async () => {
+    prepareActiveClaim.mockRejectedValueOnce(
+      new VerificationRecheckCreditEventMissingError(),
+    );
+    pauseClaim.mockResolvedValueOnce({});
+
+    await expect(worker.processNext('worker-01')).resolves.toEqual({
+      status: 'BLOCKED',
+      transactionId: 'transaction-id',
+      errorCode: 'INITIAL_CREDIT_EVENT_MISSING',
+    });
+    expect(pauseClaim).toHaveBeenCalledWith(
+      'recheck-id',
+      'claim-token',
+      PendingRecheckStatus.WAITING_CREDITS,
+      'INITIAL_CREDIT_EVENT_MISSING',
+    );
+    expect(verify).not.toHaveBeenCalled();
+  });
+
   it('persists a normalized pending result before completing the claim', async () => {
     const order: string[] = [];
     const nextRecheckAt = new Date('2026-08-06T12:05:00.000Z');
@@ -190,7 +211,7 @@ describe('VerifyEtWorkerService', () => {
       scheduledAt,
     });
     expect(planRetry).toHaveBeenCalledWith({
-      requestKey: `verifyet:status:${attempt.id}`,
+      requestKey: `verifyet:submit:${attempt.id}`,
       attemptsCompleted: 1,
       error,
     });

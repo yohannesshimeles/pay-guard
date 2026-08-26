@@ -5,6 +5,11 @@ import {
   SwaggerModule,
 } from '@nestjs/swagger';
 import { createPostmanCollection } from './postman-collection';
+import { getSchemaPath } from '@nestjs/swagger';
+import {
+  ApiErrorDetailSchema,
+  ApiErrorResponseSchema,
+} from './error-response.schema';
 
 export function createApiDocument(
   app: NestFastifyApplication,
@@ -27,10 +32,48 @@ export function createApiDocument(
     )
     .build();
 
-  return SwaggerModule.createDocument(app, config, {
+  const document = SwaggerModule.createDocument(app, config, {
     operationIdFactory: (controllerKey, methodKey) =>
       `${controllerKey.replace(/Controller$/, '')}_${methodKey}`,
+    extraModels: [ApiErrorDetailSchema, ApiErrorResponseSchema],
   });
+  addStandardErrorResponses(document);
+  return document;
+}
+
+function addStandardErrorResponses(document: OpenAPIObject): void {
+  const methods = [
+    'get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace',
+  ] as const;
+  const statuses: Readonly<Record<string, string>> = {
+    '400': 'Malformed or invalid request',
+    '401': 'Authentication failed or access token is invalid',
+    '403': 'Authenticated principal is not allowed to perform the operation',
+    '404': 'Requested resource was not found',
+    '409': 'Request conflicts with current resource state',
+    '413': 'Uploaded payload exceeds the configured limit',
+    '422': 'Request is well-formed but violates a business rule',
+    '429': 'Rate limit exceeded',
+    '500': 'Unexpected internal failure',
+    '503': 'Required dependency is unavailable',
+  };
+  for (const path of Object.values(document.paths)) {
+    for (const method of methods) {
+      const operation = path[method];
+      if (!operation) continue;
+      const responses = operation.responses;
+      for (const [status, description] of Object.entries(statuses)) {
+        responses[status] ??= {
+          description,
+          content: {
+            'application/json': {
+              schema: { $ref: getSchemaPath(ApiErrorResponseSchema) },
+            },
+          },
+        };
+      }
+    }
+  }
 }
 
 export function configureApiDocumentation(

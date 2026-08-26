@@ -8,6 +8,7 @@ import { VerificationTransitionSource } from './enums/verification-transition-so
 import { PendingRecheckDao } from './pending-recheck.dao';
 import { VerificationAttemptDao } from './verification-attempt.dao';
 import { VerificationTransitionDao } from './verification-transition.dao';
+import { V2AuditService } from '../audit/v2-audit.service';
 
 export type RecordVerificationOutcome = {
   attemptKey: string;
@@ -35,6 +36,7 @@ export class VerificationOutcomeService {
     private readonly attempts: VerificationAttemptDao,
     private readonly transitions: VerificationTransitionDao,
     private readonly rechecks: PendingRecheckDao,
+    private readonly audit: V2AuditService,
   ) {}
 
   record(
@@ -84,6 +86,20 @@ export class VerificationOutcomeService {
             scheduledAt: input.nextRecheckAt,
           });
         }
+        await this.audit.recordSystemWithin(transaction, {
+          actionType: normalized.result === VerificationAttemptResult.PENDING
+            ? 'VERIFICATION_OUTCOME_PENDING' : 'VERIFICATION_OUTCOME_FAILED',
+          recordType: 'VERIFICATION_ATTEMPT', recordId: finalized.attempt.id,
+          businessId: finalized.attempt.businessId,
+          branchId: finalized.attempt.branchId,
+          result: normalized.result === VerificationAttemptResult.FAILED
+            ? 'FAILURE' : 'SUCCESS',
+          failureReason: normalized.errorCode,
+          newValue: { transactionId: finalized.attempt.transactionId,
+            providerStatus: normalized.providerStatus,
+            responseTimeMs: normalized.responseTimeMs,
+            nextRecheckNumber, recheckLimitReached },
+        });
       }
 
       return {

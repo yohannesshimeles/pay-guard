@@ -36,9 +36,23 @@ export class V2SessionRepository {
 
   async createBusinessSession(
     input: V2BusinessSessionInput,
-  ): Promise<{ sessionId: string }> {
+  ): Promise<{ sessionId: string; replacedSessionIds: string[] }> {
     return this.database.transaction(async (client) => {
-      await this.assertActiveContext(client, input);
+      await client.query(
+        `SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))`,
+        [input.userId],
+      );
+      const role = await this.assertActiveContext(client, input);
+      const replaced = role === 'WAITER'
+        ? await client.query<{ id: string }>(
+            `UPDATE user_sessions
+             SET session_status = 'REVOKED', revoked_at = now(),
+                 revoked_reason = 'Replaced by a new Waiter device session'
+             WHERE user_id = $1 AND session_status = 'ACTIVE'
+             RETURNING id`,
+            [input.userId],
+          )
+        : { rows: [] as Array<{ id: string }> };
       const result = await client.query<{ id: string }>(
         `INSERT INTO user_sessions (
            user_id, membership_id, membership_role_id, work_assignment_id,
@@ -86,7 +100,10 @@ export class V2SessionRepository {
          input.workAssignmentId ?? null, result.rows[0].id,
          input.devicePlatform ?? null],
       );
-      return { sessionId: result.rows[0].id };
+      return {
+        sessionId: result.rows[0].id,
+        replacedSessionIds: replaced.rows.map((row) => row.id),
+      };
     });
   }
 
@@ -250,9 +267,11 @@ export class V2SessionRepository {
   private async assertActiveContext(
     client: PoolClient,
     input: V2BusinessSessionInput,
-  ): Promise<void> {
-    const result = await client.query(
-      `SELECT 1
+  ): Promise<Exclude<V2RoleCode, 'PLATFORM_SUPER_ADMIN'>> {
+    const result = await client.query<{
+      role_code: Exclude<V2RoleCode, 'PLATFORM_SUPER_ADMIN'>;
+    }>(
+      `SELECT role_assignment.role_code
        FROM users app_user
        JOIN business_user_memberships membership
          ON membership.user_id = app_user.id
@@ -281,6 +300,7 @@ export class V2SessionRepository {
       ],
     );
     if (result.rowCount !== 1) throw new Error('Active authorization context not found');
+    return result.rows[0].role_code;
   }
 
   private sessionTable(kind: V2SessionKind): string {

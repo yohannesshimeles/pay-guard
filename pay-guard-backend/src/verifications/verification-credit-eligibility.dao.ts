@@ -31,6 +31,14 @@ export class VerificationCreditPolicyPendingError extends Error {
   }
 }
 
+export class VerificationRecheckCreditEventMissingError extends Error {
+  readonly name = 'VerificationRecheckCreditEventMissingError';
+
+  constructor() {
+    super('Verification recheck requires an initial credit event');
+  }
+}
+
 export type ResolveVerificationCreditEligibility = {
   transactionId: string;
   businessId: string;
@@ -97,9 +105,7 @@ export class VerificationCreditEligibilityDao {
         throw new Error('Verification recheck requires a pending transaction');
       }
       if (!existing) {
-        throw new Error(
-          'Verification recheck requires an initial credit event',
-        );
+        throw new VerificationRecheckCreditEventMissingError();
       }
       return {
         decision: 'ELIGIBLE',

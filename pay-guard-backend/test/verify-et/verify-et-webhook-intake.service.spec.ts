@@ -1,8 +1,11 @@
+import { createHmac } from 'node:crypto';
 import { AppConfig } from '../../src/config/app-config';
+import { VerifyEtCredentialService } from '../../src/verify-et/verify-et-credential.service';
 import { VerifyEtWebhookDeliveryDao } from '../../src/verify-et/verify-et-webhook-delivery.dao';
 import { VerifyEtWebhookIntakeService } from '../../src/verify-et/verify-et-webhook-intake.service';
 import {
   UnconfiguredVerifyEtWebhookSignatureVerifier,
+  HmacVerifyEtWebhookSignatureVerifier,
   VerifyEtWebhookSignatureUnavailableError,
   VerifyEtWebhookSignatureVerifier,
 } from '../../src/verify-et/verify-et-webhook-signature-verifier';
@@ -114,5 +117,59 @@ describe('UnconfiguredVerifyEtWebhookSignatureVerifier', () => {
     await expect(
       verifier.verify({ rawBody: Buffer.from('{}'), headers: {} }),
     ).rejects.toBeInstanceOf(VerifyEtWebhookSignatureUnavailableError);
+  });
+});
+
+describe('HmacVerifyEtWebhookSignatureVerifier official signature contract', () => {
+  it('verifies sha256 HMAC over timestamp.rawBody and returns delivery metadata', async () => {
+    const secret = 'verify-et-webhook-test-secret-at-least-32-characters';
+    const rawBody = Buffer.from(JSON.stringify({
+      event: 'verification.completed', requestId: 'request-12345',
+    }));
+    const timestamp = '2026-02-20T12:00:02.500Z';
+    const signature = `sha256=${createHmac('sha256', secret)
+      .update(`${timestamp}.`, 'utf8').update(rawBody).digest('hex')}`;
+    const verifier = new HmacVerifyEtWebhookSignatureVerifier(
+      new VerifyEtCredentialService({
+          verifyEt: {
+            enabled: true, baseUrl: 'https://verify.et',
+            apiKey: 'VERIFY_BANK_ET_test_key_at_least_32_characters',
+            webhookSecret: secret, waitMs: 5_000, timeoutMs: 8_000,
+            maxResponseBytes: 65_536, maxPollAttempts: 6,
+            initialPollDelayMs: 2_000, maxPollDelayMs: 30_000,
+          },
+        } as AppConfig),
+    );
+
+    await expect(verifier.verify({ rawBody, headers: {
+      'x-webhook-timestamp': timestamp,
+      'x-webhook-signature': signature,
+      'x-webhook-delivery-id': 'delivery:provider:12345',
+      'x-webhook-event': 'verification.completed',
+    } })).resolves.toEqual({
+      deliveryId: 'delivery:provider:12345',
+      eventType: 'verification.completed',
+    });
+  });
+
+  it('rejects a mismatched signature', async () => {
+    const verifier = new HmacVerifyEtWebhookSignatureVerifier(
+      new VerifyEtCredentialService({
+          verifyEt: {
+            enabled: true, baseUrl: 'https://verify.et',
+            apiKey: 'VERIFY_BANK_ET_test_key_at_least_32_characters',
+            webhookSecret: 'verify-et-webhook-test-secret-at-least-32-characters',
+            waitMs: 5_000, timeoutMs: 8_000, maxResponseBytes: 65_536,
+            maxPollAttempts: 6, initialPollDelayMs: 2_000,
+            maxPollDelayMs: 30_000,
+          },
+        } as AppConfig),
+    );
+    await expect(verifier.verify({ rawBody: Buffer.from('{}'), headers: {
+      'x-webhook-timestamp': 'timestamp',
+      'x-webhook-signature': `sha256=${'0'.repeat(64)}`,
+      'x-webhook-delivery-id': 'delivery:provider:12345',
+      'x-webhook-event': 'verification.completed',
+    } })).rejects.toThrow('signature is invalid');
   });
 });

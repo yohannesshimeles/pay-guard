@@ -59,6 +59,28 @@ describe('ProofFileValidator', () => {
     ).toThrow('Proof content does not match its declared type');
   });
 
+  it.each([
+    '/JavaScript', '/OpenAction', '/AA', '/Launch',
+    '/EmbeddedFile', '/RichMedia', '/XFA',
+  ])('rejects PDF active-content feature %s before parsing', (feature) => {
+    expect(() => new ProofFileValidator(1_024).validate({
+      fileName: 'receipt.pdf',
+      mimeType: 'application/pdf',
+      body: Uint8Array.from(Buffer.from(`%PDF-1.7\n1 0 obj << ${feature} 2 0 R >>`)),
+    })).toThrow('Proof PDF contains unsupported active content');
+  });
+
+  it.each([
+    ['receipt.pdf', 'application/pdf', [0xff, 0xd8, 0xff, 0x00]],
+    ['receipt.jpg', 'image/jpeg', [...Buffer.from('%PDF-1.7')]],
+    ['receipt.png', 'image/png', [0xff, 0xd8, 0xff, 0x00]],
+    ['receipt.svg.png', 'image/png', [...Buffer.from('<svg><script>')]],
+  ])('rejects MIME-confused file %s declared as %s', (fileName, mimeType, bytes) => {
+    expect(() => validator.validate({
+      fileName, mimeType, body: Uint8Array.from(bytes),
+    })).toThrow('Proof content does not match its declared type');
+  });
+
   it.each(['../receipt.pdf', '..\\receipt.pdf', 'bad\u0000name.pdf'])(
     'rejects unsafe filename %s',
     (fileName) => {

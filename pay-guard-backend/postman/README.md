@@ -7,12 +7,17 @@ Import both files into Postman:
 1. `PayGuard.postman_collection.json`
 2. `PayGuard-Local.postman_environment.json`
 
+If Postman opens the **Branches** folder instead of its list request, import
+`PayGuard-Branch-Setup.postman_collection.json`. Its single top-level request
+lists branches for `{{businessId}}` and saves the first returned branch UUID to
+the active environment as `branchId`.
+
 Select **PayGuard Local** in the Postman environment selector.
 
 The collection is generated from the same OpenAPI document used by Swagger and
-contains every registered API operation. Do not edit it by hand. After changing a
-controller or DTO, run the API and use `npm run docs:export`; use
-`npm run docs:check` in validation to fail when committed artifacts are stale.
+contains every registered API operation. Do not edit generated JSON by hand. After
+changing a controller or DTO, use `npm run docs:export`; use `npm run docs:check`
+in validation to fail when OpenAPI, the collection or environment is stale.
 
 The latest collection can also be downloaded from
 `GET http://localhost:4000/docs/postman.json` while the API is running.
@@ -33,30 +38,25 @@ set BOOTSTRAP_ADMIN_PASSWORD=
 
 The command is one-time and refuses to overwrite an existing Platform Super Admin.
 Set the same email and password privately in the Postman environment variables
-`adminEmail` and `adminPassword`.
+`identity` and `password`.
 
 ## Required environment values
 
-Before testing, set private passwords (12 or more characters) for:
-
-- `ownerPassword`
-- `managerPassword`
-- `cashierPassword`
-- `waiterPassword`
+Before testing, set the desired login `identity` and its private `password` of 12 or
+more characters.
 
 Do not export or commit a Postman environment after it contains real passwords or
 tokens. The checked-in environment file contains blank secret values.
 
 ## Authentication and identifiers
 
-Run `Authentication / Log in`, copy the returned access token into the
-`accessToken` collection variable, then replace the generated `replace-*` values
-for identifiers used by the requests you want to exercise. Collection folders are
-grouped by the Swagger/OpenAPI tags.
+Run `Authentication / Auth_login`. Its test script captures the returned access and
+refresh tokens. `Auth_refresh` rotates both variables and `Auth_logout` clears them.
+Then populate the blank identifier variables used by the requests you want to
+exercise. Collection folders are grouped by Swagger/OpenAPI tags.
 
-The workflow creates database records. For a repeat run, change the Owner/Manager/
-Cashier/Waiter emails in the environment. Bank and registration codes use Postman's
-timestamp variable and are generated uniquely.
+Mutating requests create database records. Adjust their generated example bodies and
+identifier variables for the scenario being exercised.
 
 ## Expected behavior
 

@@ -8,6 +8,8 @@ import {
 } from '@nestjs/common';
 import { FastifyReply } from 'fastify';
 import { requestContext } from './request-context';
+import { describeError } from './safe-error';
+import { resolvePublicError } from './error-contract';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -24,14 +26,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const raw =
       exception instanceof HttpException ? exception.getResponse() : undefined;
 
-    const message =
-      typeof raw === 'object' && raw !== null && 'message' in raw
-        ? (raw as { message: string | string[] }).message
-        : numericStatus === 500
-          ? 'An unexpected error occurred'
-          : exception instanceof Error
-            ? exception.message
-            : 'Request failed';
+    const error = resolvePublicError(exception, numericStatus, raw);
 
     if (numericStatus >= 500) {
       this.logger.error(
@@ -39,19 +34,16 @@ export class HttpExceptionFilter implements ExceptionFilter {
           event: 'request.failed',
           correlationId,
           status,
-          error: exception instanceof Error ? exception.name : 'UnknownError',
+          error: describeError(exception),
         }),
       );
     }
 
     void response.status(status).send({
       success: false,
-      message: Array.isArray(message) ? 'Validation failed' : message,
+      message: error.description,
       data: null,
-      error: {
-        code: `HTTP_${status}`,
-        details: Array.isArray(message) ? message : undefined,
-      },
+      error,
       correlationId,
     });
   }

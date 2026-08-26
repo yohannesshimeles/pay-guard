@@ -9,11 +9,11 @@ import { VerifyEtStatusUrlPolicyService } from './verify-et-status-url-policy.se
 import { VerifyEtWebhookDeliveryDao } from './verify-et-webhook-delivery.dao';
 import { VerifyEtWebhookIntakeService } from './verify-et-webhook-intake.service';
 import {
-  UnconfiguredVerifyEtWebhookSignatureVerifier,
+  HmacVerifyEtWebhookSignatureVerifier,
   VERIFYET_WEBHOOK_SIGNATURE_VERIFIER,
 } from './verify-et-webhook-signature-verifier';
 import {
-  UnconfiguredVerifyEtProviderAdapter,
+  HttpVerifyEtProviderAdapter,
   VERIFYET_PROVIDER_ADAPTER,
 } from './verify-et-provider.adapter';
 import { VerifyEtWorkItemDao } from './verify-et-work-item.dao';
@@ -23,10 +23,11 @@ import { VerifyEtIncidentController } from './verify-et-incident.controller';
 import { VerifyEtIncidentDao } from './verify-et-incident.dao';
 import { VerifyEtIncidentService } from './verify-et-incident.service';
 import { NotificationModule } from '../notifications/notification.module';
+import { VerifyEtWebhookController } from './verify-et-webhook.controller';
 
 @Module({
   imports: [AuthModule, VerificationsModule, NotificationModule],
-  controllers: [VerifyEtIncidentController],
+  controllers: [VerifyEtIncidentController, VerifyEtWebhookController],
   providers: [
     VerifyEtCredentialService,
     VerifyEtErrorMapperService,
@@ -42,11 +43,11 @@ import { NotificationModule } from '../notifications/notification.module';
     VerifyEtIncidentService,
     {
       provide: VERIFYET_WEBHOOK_SIGNATURE_VERIFIER,
-      useClass: UnconfiguredVerifyEtWebhookSignatureVerifier,
+      useClass: HmacVerifyEtWebhookSignatureVerifier,
     },
     {
       provide: VERIFYET_PROVIDER_ADAPTER,
-      useClass: UnconfiguredVerifyEtProviderAdapter,
+      useClass: HttpVerifyEtProviderAdapter,
     },
   ],
   exports: [

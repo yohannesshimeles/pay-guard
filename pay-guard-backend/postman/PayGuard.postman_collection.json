@@ -27,6 +27,21 @@
       "type": "string"
     },
     {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "identity",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "",
+      "type": "string"
+    },
+    {
       "key": "accountId",
       "value": "replace-accountId",
       "type": "string"
@@ -34,6 +49,11 @@
     {
       "key": "bankId",
       "value": "replace-bankId",
+      "type": "string"
+    },
+    {
+      "key": "batchId",
+      "value": "replace-batchId",
       "type": "string"
     },
     {
@@ -99,6 +119,11 @@
     {
       "key": "reconciliationId",
       "value": "replace-reconciliationId",
+      "type": "string"
+    },
+    {
+      "key": "recordId",
+      "value": "replace-recordId",
       "type": "string"
     },
     {
@@ -224,12 +249,15 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"identity\": \"string\",\n  \"password\": \"string\",\n  \"deviceIdentifier\": \"string\",\n  \"devicePlatform\": \"android\",\n  \"context\": {\n    \"membershipId\": \"00000000-0000-4000-8000-000000000001\",\n    \"membershipRoleId\": \"00000000-0000-4000-8000-000000000001\",\n    \"workAssignmentId\": \"00000000-0000-4000-8000-000000000001\"\n  }\n}",
+              "raw": "{\n  \"identity\": \"{{identity}}\",\n  \"password\": \"{{password}}\",\n  \"deviceIdentifier\": \"postman-{{$guid}}\",\n  \"devicePlatform\": \"android\",\n  \"context\": {\n    \"membershipId\": \"00000000-0000-4000-8000-000000000001\",\n    \"membershipRoleId\": \"00000000-0000-4000-8000-000000000001\",\n    \"workAssignmentId\": \"00000000-0000-4000-8000-000000000001\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
+            },
+            "auth": {
+              "type": "noauth"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/login",
@@ -251,7 +279,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const payload = pm.response.json();",
+                  "const tokens = payload.data || payload;",
+                  "if (tokens.accessToken) pm.collectionVariables.set('accessToken', tokens.accessToken);",
+                  "if (tokens.refreshToken) pm.collectionVariables.set('refreshToken', tokens.refreshToken);"
                 ]
               }
             }
@@ -272,12 +304,15 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"string\"\n}",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
+            },
+            "auth": {
+              "type": "noauth"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/refresh",
@@ -299,7 +334,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "const payload = pm.response.json();",
+                  "const tokens = payload.data || payload;",
+                  "if (tokens.accessToken) pm.collectionVariables.set('accessToken', tokens.accessToken);",
+                  "if (tokens.refreshToken) pm.collectionVariables.set('refreshToken', tokens.refreshToken);"
                 ]
               }
             }
@@ -320,12 +359,15 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"string\"\n}",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
+            },
+            "auth": {
+              "type": "noauth"
             },
             "url": {
               "raw": "{{baseUrl}}/api/v1/auth/logout",
@@ -347,7 +389,9 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+                  "pm.collectionVariables.unset('accessToken');",
+                  "pm.collectionVariables.unset('refreshToken');"
                 ]
               }
             }
@@ -1183,6 +1227,9 @@
                 }
               }
             },
+            "auth": {
+              "type": "noauth"
+            },
             "url": {
               "raw": "{{baseUrl}}/api/v1/businesses/register",
               "host": [
@@ -1548,6 +1595,9 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": {
+              "type": "noauth"
+            },
             "url": {
               "raw": "{{baseUrl}}/health/live",
               "host": [
@@ -1578,6 +1628,9 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": {
+              "type": "noauth"
+            },
             "url": {
               "raw": "{{baseUrl}}/health/ready",
               "host": [
@@ -1608,6 +1661,9 @@
           "request": {
             "method": "GET",
             "header": [],
+            "auth": {
+              "type": "noauth"
+            },
             "url": {
               "raw": "{{baseUrl}}/metrics",
               "host": [
@@ -2259,6 +2315,97 @@
                 "notifications",
                 "devices",
                 "{{deviceId}}"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Platform Archive",
+      "item": [
+        {
+          "name": "Archive_list",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/platform/archive/batches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "platform",
+                "archive",
+                "batches"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Archive_retrieve",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "disabled": false,
+                "description": "Generated from the OpenAPI request body."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"string\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/platform/archive/batches/{{batchId}}/records/{{recordId}}/retrieve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "platform",
+                "archive",
+                "batches",
+                "{{batchId}}",
+                "records",
+                "{{recordId}}",
+                "retrieve"
               ],
               "query": []
             }
@@ -4014,6 +4161,83 @@
               ],
               "query": []
             }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Verify.ET Webhooks",
+      "item": [
+        {
+          "name": "Receive a signed Verify.ET verification webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Webhook-Event",
+                "value": "string",
+                "disabled": false
+              },
+              {
+                "key": "X-Webhook-Delivery-Id",
+                "value": "string",
+                "disabled": false
+              },
+              {
+                "key": "X-Webhook-Signature",
+                "value": "string",
+                "disabled": false
+              },
+              {
+                "key": "X-Webhook-Timestamp",
+                "value": "string",
+                "disabled": false
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "disabled": false,
+                "description": "Generated from the OpenAPI request body."
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"verification.completed\",\n  \"requestId\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"timestamp\": \"2026-02-20T12:00:02.500Z\",\n  \"data\": {\n    \"processingStatus\": \"completed\",\n    \"status\": \"success\",\n    \"verified\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks/verify-et",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks",
+                "verify-et"
+              ],
+              "query": []
+            },
+            "description": "Receive a signed Verify.ET verification webhook"
           },
           "event": [
             {

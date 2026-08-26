@@ -1,0 +1,78 @@
+{
+  "info": {
+    "_postman_id": "a527a19c-8a5a-43f6-a044-5b0f489e891d",
+    "name": "PayGuard Branch Setup",
+    "description": "Small setup collection for listing the authenticated owner's branches and saving the first returned branch ID.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "LIST BRANCHES - OPEN THIS REQUEST",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/businesses/{{businessId}}/branches",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "businesses",
+            "{{businessId}}",
+            "branches"
+          ]
+        },
+        "description": "Lists branches for the selected business. A successful response automatically saves the first branch UUID as the environment variable branchId."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+              "const payload = pm.response.json();",
+              "const data = payload.data ?? payload;",
+              "const branches = Array.isArray(data) ? data : (data.items ?? data.results ?? []);",
+              "pm.test('At least one branch is returned', () => pm.expect(branches.length).to.be.above(0));",
+              "if (branches[0]?.id) {",
+              "  pm.environment.set('branchId', branches[0].id);",
+              "  console.log('Saved branchId:', branches[0].id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:4000",
+      "type": "string"
+    },
+    {
+      "key": "businessId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

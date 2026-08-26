@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import {
   FastifyAdapter,
@@ -9,6 +10,7 @@ import {
   AppConfig,
   DEFAULT_CLAMAV_CONFIG,
   DEFAULT_DATABASE_POOL_CONFIG,
+  DEFAULT_FIREBASE_CONFIG,
   DEFAULT_VERIFYET_CONFIG,
 } from '../../src/config/app-config';
 
@@ -28,6 +30,8 @@ describeWithDatabase('application bootstrap', () => {
       databasePool: DEFAULT_DATABASE_POOL_CONFIG,
       clamav: DEFAULT_CLAMAV_CONFIG,
       verifyEt: DEFAULT_VERIFYET_CONFIG,
+      firebase: DEFAULT_FIREBASE_CONFIG,
+      notificationWorkerPollMs: 2_000,
       redisUrl: 'redis://127.0.0.1:6399',
       jwtAccessSecret: 'test-secret-that-is-longer-than-thirty-two-characters',
       jwtAccessTtlSeconds: 900,
@@ -67,6 +71,39 @@ describeWithDatabase('application bootstrap', () => {
       success: true,
       data: { status: 'ok' },
     });
+  });
+
+  it('registers correlated structured request logging without untrusted input', async () => {
+    const logged = jest.spyOn(Logger.prototype, 'log').mockImplementation();
+    const response = await app
+      .getHttpAdapter()
+      .getInstance()
+      .inject({
+        method: 'GET',
+        url: '/health/live?password=integration-private&accountNumber=100000001',
+        headers: {
+          'x-correlation-id': 'integration-request-log-1234',
+          authorization: 'Bearer integration-private-token',
+        },
+      });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['x-correlation-id']).toBe(
+      'integration-request-log-1234',
+    );
+    expect(response.json()).toMatchObject({
+      correlationId: 'integration-request-log-1234',
+    });
+    const completionCall = logged.mock.calls.find(([value]) =>
+      String(value).includes('request.completed'),
+    );
+    expect(completionCall).toBeDefined();
+    const serialized = JSON.stringify(completionCall);
+    expect(serialized).toContain('integration-request-log-1234');
+    expect(serialized).toContain('/health/live');
+    expect(serialized).not.toContain('integration-private');
+    expect(serialized).not.toContain('100000001');
+    logged.mockRestore();
   });
 
   it('reports not ready when Redis and object storage are unavailable', async () => {

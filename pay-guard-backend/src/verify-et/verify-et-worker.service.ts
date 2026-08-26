@@ -5,6 +5,7 @@ import { PendingRecheckDao } from '../verifications/pending-recheck.dao';
 import { PendingRecheckCoordinatorService } from '../verifications/pending-recheck-coordinator.service';
 import { VerificationOutcomeService } from '../verifications/verification-outcome.service';
 import { VerifiedPaymentPostingService } from '../verifications/verified-payment-posting.service';
+import { VerificationRecheckCreditEventMissingError } from '../verifications/verification-credit-eligibility.dao';
 import {
   VERIFYET_PROVIDER_ADAPTER,
   VerifyEtProviderAdapter,
@@ -46,7 +47,28 @@ export class VerifyEtWorkerService {
   ): Promise<VerifyEtWorkerResult> {
     const claim = await this.rechecks.claimNext(workerId, leaseSeconds);
     if (!claim) return { status: 'IDLE' };
-    const preparation = await this.coordinator.prepareActiveClaim(claim);
+    let preparation: Awaited<
+      ReturnType<PendingRecheckCoordinatorService['prepareActiveClaim']>
+    >;
+    try {
+      preparation = await this.coordinator.prepareActiveClaim(claim);
+    } catch (error) {
+      if (!(error instanceof VerificationRecheckCreditEventMissingError)) {
+        throw error;
+      }
+      const errorCode = 'INITIAL_CREDIT_EVENT_MISSING';
+      await this.rechecks.pauseClaim(
+        claim.id,
+        claim.claimToken!,
+        PendingRecheckStatus.WAITING_CREDITS,
+        errorCode,
+      );
+      return {
+        status: 'BLOCKED',
+        transactionId: claim.transactionId,
+        errorCode,
+      };
+    }
     if (preparation.decision !== 'PREPARED') {
       return { status: 'BLOCKED', transactionId: claim.transactionId };
     }
@@ -54,10 +76,13 @@ export class VerifyEtWorkerService {
     const workItem = await this.workItems.requireByAttemptId(
       preparation.attempt.id,
     );
-    const idempotencyKey = `verifyet:status:${preparation.attempt.id}`;
+    const operation = workItem.providerRequestId ? 'STATUS' : 'SUBMIT';
+    const idempotencyKey = `verifyet:${operation.toLowerCase()}:${preparation.attempt.id}`;
     const request = {
       idempotencyKey,
       verificationAttemptId: preparation.attempt.id,
+      providerRequestId: workItem.providerRequestId,
+      bankId: workItem.bankId,
       bankCode: workItem.bankCode,
       transactionReference: workItem.transactionReference,
       amount: workItem.amount,
@@ -65,7 +90,7 @@ export class VerifyEtWorkerService {
     };
     const reserved = await this.history.reserve({
       verificationAttemptId: request.verificationAttemptId,
-      operation: 'STATUS',
+      operation,
       idempotencyKey,
       payload: request,
       bankCode: request.bankCode,

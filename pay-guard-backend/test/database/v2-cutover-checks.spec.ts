@@ -8,6 +8,9 @@ describe('V2 cutover environment checks', () => {
     JWT_ACCESS_SECRET: 'jwt-secret-material-that-is-longer-than-thirty-two-characters',
     ACCOUNT_ENCRYPTION_KEY:
       'account-key-material-that-is-longer-than-thirty-two-characters',
+    ARCHIVE_ENCRYPTION_KEY:
+      'archive-key-material-that-is-longer-than-thirty-two-characters',
+    S3_SECRET_ACCESS_KEY: 'storage-key-material-longer-than-thirty-two-characters',
     S3_ENDPOINT: 'http://127.0.0.1:9000',
   } satisfies NodeJS.ProcessEnv;
 
@@ -28,6 +31,7 @@ describe('V2 cutover environment checks', () => {
       DATABASE_SCHEMA_VERSION: 'legacy',
       JWT_ACCESS_SECRET: 'replace-with-at-least-32-random-characters',
       ACCOUNT_ENCRYPTION_KEY: 'replace-with-at-least-32-random-characters',
+      ARCHIVE_ENCRYPTION_KEY: 'replace-with-at-least-32-random-characters',
     });
     expect(checks.filter((check) => check.status === 'FAIL').length).toBeGreaterThanOrEqual(4);
   });

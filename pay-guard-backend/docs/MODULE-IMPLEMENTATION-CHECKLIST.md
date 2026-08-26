@@ -18,19 +18,23 @@ Implementation:
 - [x] Add formatting, linting, migration, unit, integration and build commands.
 - [x] Add correlation IDs and consistent success/message/data/error envelopes.
 - [x] Generate API documentation from controllers/contracts.
-
+etf jr i fr kgjmm , vy cj ,nm,kv  
 Expected:
-
-- [ ] API and worker start independently with validated configuration.
+t lnju n,3n,k n k  , n
+- [x] API and worker start independently with validated configuration. The guarded
+      Phase 10 container rehearsal verifies both positive boot paths, production
+      configuration rejection and configured-secret absence from startup logs.
 - [x] Missing secrets/configuration fail validation without printing secret values.
-- [x] Local equivalents of CI lint, typecheck, migration, unit, integration and build
+- [x] Local equivalents of ,vi m,fsdov , nh n,  kkCI lint, typecheck, migration, unit, integration and build
       gates pass. Hosted CI execution remains a repository/remote concern.
-
-### Observability and operational foundation
-
+ ,  ,knvk n,r   y n  ,mne
+### Observability and operational foundationirex  , d,nuter
+ fn m
 Implementation:
 
-- [ ] Add structured redacted logging and request correlation.
+- [x] Add structured redacted logging d,and request correlation. Every HTTP route,
+      including unprefixed probes, receives a validated correlation ID; completion
+      logs contain only method, route template, status, outcome and bounded duration.
 - [x] Add OpenTelemetry traces and Prometheus-compatible metrics.
 - [x] Add API liveness/readiness and dependency health checks.
 - [ ] Measure queue depth/age, webhook delivery, provider latency and API failures.
@@ -38,21 +42,24 @@ Implementation:
 Expected:
 
 - [ ] A verification can be traced from client request through worker/provider callback.
-- [ ] Logs never contain API keys, passwords, full account numbers or sensitive raw payloads.
-- [x] Health endpoints distinguish process liveness from database/Redis/storage readiness.
+- [x] Logs never contain API keys, passwords, full account numbers or sensitive raw
+      payloads. Sanitizer/error tests, startup marker scanus, request-logger tests and
+      a static complete-source leakage gate enforce the implemented log boundaries.
+- [x] Health endpoints distinguish process li  l veness from database/Redis/storage readiness.j
 
-## Phase 1 - Authentication and Sessions module
+## Phase 1 - Authentication and Sessions modulee
 
 Implementation:
-
+bif,m
 - [x] Create users, roles, permissions, user roles, sessions, devices and reset-token migrations.
-- [ ] Implement login, refresh, logout, password reset and `GET /auth/me`.
+- [ ] Implement login, refresh, logout, password reset andn `GET /auth/me`.
 - [x] Add short-lived access tokens and rotated refresh tokens.
 - [x] Implement server-side RBAC plus business/branch context.
 - [x] Enforce one active Waiter device and second-device invalidation.
 - [x] Revoke sessions when a user is removed, suspended or explicitly logged out.
-- [ ] Audit login, reset, role, device and revocation events. Login/logout are implemented;
-      reset/role/device audit completion depends on their command endpoints.
+- [ ] Audit login, reset, role, device and revocation events. Login/logout and automatic
+      Waiter device replacement are implemented; reset/role and explicit device-command
+      audit completion depends on their future endpoints.
 
 Expected:
 
@@ -65,7 +72,8 @@ Completion:
 
 - [ ] Role/action/scope matrix tests pass.
 - [ ] Refresh replay and revocation integration tests pass.
-- [ ] No authentication secret appears in logs or responses.
+- [x] Authentication secrets are redacted from application logs and HTTP responses;
+      raw error-message sinks are rejected by the Phase 9 leakage scan.
 
 ## Phase 2 - Businesses module
 
@@ -182,9 +190,9 @@ Expected:
 
 - [x] Clients receive sanitized extraction states without protected raw evidence.
 - [x] Malformed or hostile documents do not execute or reach storage/provider adapters.
-- [ ] Evidence retention follows the active/archive policy. Phase 3 now excludes
-      archived receipts from operational queries and enforces one-year eligibility;
-      encrypted transfer, integrity verification and deletion remain Phase 9 gates.
+- [x] Evidence retention follows the active/archive policy: operational queries
+      exclude archived receipts, one-year eligibility is enforced, and Phase 9
+      provides encrypted transfer, integrity verification and verified deletion.
 
 Completion:
 
@@ -221,11 +229,11 @@ Expected:
 - [ ] Automatic retry/poll/webhook never creates a new credit deduction.
 - [x] Provider failures are sanitized and visible to Super Admin operations.
       Increment 10 provides role- and identity-restricted list/detail/acknowledgement
-      endpoints with bounded filters, idempotent row locking and atomic admin audit.
+      endpoints with bounded filters, idempotent r mu ow locking and atomic admin audit.
 
 Completion:
 
-- [ ] Provider contract fixtures and every error-path test pass.
+- [ ] Provider contract fixtures and every erbror-path test pass.
 - [ ] Duplicate webhook cannot repeat a financial/credit effect.
 
 ## Phase 3 - Verifications module
@@ -235,7 +243,7 @@ Implementation:
 - [x] Implement the canonical processing and result state machine. Immutable final
       states, internal transition authorities, row locking and atomic status history are
       complete in Verifications increment 1.
-- [x] Resolve branch credit eligibility before ordinary verification. Branch wallet
+- [x] Resolve branch credit eligibility ben k ,vbfore ordinary verification. Branch wallet
       locking, exactly-once initial debit, zero-credit blocking and no-charge rechecks are
       complete in Verifications increment 2.
 - [x] Create idempotent queued attempts and bind them to the initial credit event.
@@ -389,7 +397,7 @@ Completion:
 - [x] Match, discrepancy, returned, approved and replacement/superseded workflows
       pass end to end.
 
-## Phase 7 - Credits module
+sf mn , n## Phase 7 - Credits module
 
 Implementation:
 
@@ -397,16 +405,16 @@ Implementation:
       and constrained deferred-deduction obligations.
 - [x] Allocate verified subscription credits idempotently to the selected branch with
       plan-bounded one-month expiry.
-- [x] Persist immutable 75%, 90% and 100% threshold alerts exactly once per lot.
+- [x] Persist immutable 75%, 90% anuk  ,g kji y n  , mnd 100% threshold alerts exactly once per lot.xildi
 - [x] Stop ordinary verification when no eligible branch lot is available.
 - [x] Define all six PDF credit event types and their source-lot/actor/audit fields;
       grant, expiry, deferred and adjustment writers remain iterative work.
-- [x] Ensure the ordinary verification balance never becomes negative.
+- [x] Ensure the ordinary verification balanerfce never becomes negative.
 
 Expected:
 
 - [x] Available credit, lots and canonical history are branch-specific.
-- [x] Retry/poll/webhook never deduct additional credits.
+- [x] Retry/poll/webhook never deduct additional cre g k    i dits.
 
 Completion:
 
@@ -524,9 +532,10 @@ Expected:
 
 Completion:
 
-- [ ] Report reconciliation, permission and load tests pass.
+- [x] Report reconciliation, permission and load tests pass.
   - [x] Report/export reconciliation and permission tests pass.
-  - [ ] Report and export load thresholds pass under production-sized data.
+  - [x] Report and export load thresholds pass with 250,000 ledger rows and
+        100,000 verification attempts in the rollback-only PostgreSQL harness.
 
 ## Phase 9 - Audit module
 
@@ -534,8 +543,8 @@ Implementation:
 
 - [ ] Record every PDF-listed identity, configuration, verification, subscription,
       credit, financial, reconciliation, fraud and security event. Increment 2 closes
-      the implemented authenticated mutation surface; provider/report background
-      system events and future password/role/archive endpoints remain.
+      the implemented authenticated mutation and background provider/report/archive
+      surfaces; only future password/role endpoints remain outside implemented scope.
 - [x] Store safe actor, scope, time, before/after metadata and correlation. Increment 1
       adds recursive secret redaction, bounded metadata/text and request correlation.
 - [x] Prevent application users from altering audit records. PostgreSQL rejects update
@@ -550,32 +559,68 @@ Expected:
 
 Completion:
 
-- [ ] Audit coverage matrix has no missing sensitive action. The matrix now exists and
-      identifies only background system lifecycle and future-module gaps.
+- [x] Audit coverage matrix has no missing sensitive action in the implemented surface;
+      it identifies only endpoints that do not yet exist.
 
 ## Phase 9 - Archive module
 
 Implementation:
 
-- [ ] Select eligible operational records after one year.
-- [ ] Package and encrypt records/evidence with manifest metadata.
-- [ ] Transfer to protected archive storage and verify integrity.
-- [ ] Remove archived records from normal operational queries.
-- [ ] Implement authorized retrieval and complete archive audit.
+- [x] Select eligible transaction receipt evidence after one year.
+- [x] Package and encrypt records/evidence with manifest metadata.
+- [x] Transfer to protected archive storage and verify integrity.
+- [x] Remove archived receipt evidence from normal operational queries.
+- [x] Implement authorized retrieval and complete archive audit.
 
 Expected:
 
-- [ ] Archived records remain retrievable and traceable but absent from active views.
+- [x] Archived receipt records remain retrievable and traceable but absent from active views.
 
 Completion:
 
-- [ ] Archive, integrity, retrieval, authorization and failure-recovery tests pass.
+- [x] Archive encryption, integrity, retrieval, authorization and failure-recovery
+      tests pass for the implemented receipt-evidence retention boundary.
+- [x] A 16 MiB receipt completes the PostgreSQL/object-storage archive, verified
+      deletion and exact audited retrieval exercise.
 
 ## Phase 10 - Production completion
 
+- [x] Add Redis-backed application rate limits for global API traffic, stricter auth
+      and proof-upload policies, bounded proxy trust and enforcement metrics.
+- [x] Keep health/metrics probes diagnosable during Redis incidents; sensitive routes
+      fail closed while general traffic records an observable protection bypass.
+- [ ] Validate application limits with production-equivalent WAF/ingress and expected
+      shared-NAT/mobile traffic before approving final thresholds.
 - [ ] All module completion checks pass in CI.
+      - [x] Root-discoverable backend workflow covers complete unit, integration,
+            security, history, load, native PDF-worker and build gates on Node 20.19.
+      - [x] An isolated read-only-source Node 20.19 Linux parity exercise runs the
+            native PDF worker, unit suite, lint, typecheck and production build.
+      - [x] All external workflow actions and CI service images use immutable commit
+            or image-digest pins enforced by a repository validation gate.
+      - [x] Weekly reviewed npm, Docker and GitHub Actions update lanes keep immutable
+            references refreshable without automatic merge or policy bypass.
+      - [x] GitHub dependency graph enablement was confirmed by the repository operator
+            on 2026-08-14; retain a settings-page reference with release evidence.
+      - [x] Pull requests run an immutable, read-only dependency-review gate that
+            rejects newly introduced high/critical runtime vulnerabilities.
+      - [x] Explicit API and worker image targets have role-correct commands and health
+            behavior, and CI builds, scans, contract-checks and attests both images.
+      - [x] A guarded local rehearsal starts API and worker independently against the
+            dependency stack and proves both reject invalid production configuration.
+      - [ ] Dependabot alerts and security updates are enabled in repository settings.
+      - [ ] Default-branch protection requires dependency review and complete backend CI.
+      - [ ] The new root workflow completes successfully on the hosted CI runner.
+      - [x] Release evidence fails closed unless repository security and branch
+            protection settings have HTTPS proof tied to the required checks.
 - [ ] Verify.ET production key/webhook specification is configured outside source.
 - [ ] Platform receiving accounts and final bank QR samples are approved.
 - [ ] Backup restoration, load, security and incident exercises pass.
+      - [x] Local encrypted restore, report/Redis load, security, provider/queue incident
+            and immutable-image deployment/rollback exercises pass.
+      - [ ] Production/staging exercises complete with approved operator evidence.
 - [ ] Monitoring alerts and runbooks have named owners.
-- [ ] No real key or full account number exists in repository history.
+- [x] A strict secret-free release-evidence manifest validates every remaining external
+      approval, owner, drill, CI, vendor, bank and infrastructure reference before GO.
+- [x] A repeatable all-reachable-commit history scan found no real key or
+      non-fixture full account number; synthetic account fixtures are counted separately.

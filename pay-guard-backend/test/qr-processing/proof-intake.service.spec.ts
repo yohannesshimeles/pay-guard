@@ -95,6 +95,27 @@ describe('ProofIntakeService', () => {
     expect(decoderDecode).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['PDF', 'receipt.pdf', 'application/pdf', '%PDF-1.7\nX5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR'],
+    ['image', 'receipt.jpg', 'image/jpeg', '\xff\xd8\xffX5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR'],
+  ])('never decodes or stores a malicious %s corpus member', async (
+    _kind, fileName, mimeType, contents,
+  ) => {
+    malwareScan.mockResolvedValue({ status: MalwareScanStatus.INFECTED });
+    const hostile = {
+      fileName,
+      mimeType,
+      body: Uint8Array.from(Buffer.from(contents, 'latin1')),
+    };
+
+    await expect(service.inspect(hostile)).rejects.toBeInstanceOf(
+      UnprocessableEntityException,
+    );
+    expect(decoderDecode).not.toHaveBeenCalled();
+    expect(storagePut).not.toHaveBeenCalled();
+    expect(receiptCreate).not.toHaveBeenCalled();
+  });
+
   it('models unsupported proof without inventing QR content', async () => {
     malwareScan.mockResolvedValue({
       status: MalwareScanStatus.CLEAN,

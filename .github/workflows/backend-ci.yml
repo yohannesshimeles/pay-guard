@@ -1,0 +1,187 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - "pay-guard-backend/**"
+      - ".github/workflows/backend-ci.yml"
+      - ".github/dependabot.yml"
+  pull_request:
+    paths:
+      - "pay-guard-backend/**"
+      - ".github/workflows/backend-ci.yml"
+      - ".github/dependabot.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Reject newly introduced vulnerable runtime dependencies
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: high
+          fail-on-scopes: runtime
+          comment-summary-in-pr: never
+
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: pay-guard-backend
+    services:
+      postgres:
+        image: postgres:16-alpine@sha256:44c4ee9810eff91f7eab4d822642e01115b1a9eccce4bcbdde7604752d68eac6
+        env:
+          POSTGRES_DB: payguard_test
+          POSTGRES_USER: payguard
+          POSTGRES_PASSWORD: payguard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U payguard -d payguard_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://payguard:payguard@localhost:5432/payguard_test
+      TEST_V2_DATABASE_URL: postgresql://payguard:payguard@localhost:5432/payguard_test
+      REPORT_LOAD_DATABASE_URL: postgresql://payguard:payguard@localhost:5432/payguard_test
+      RATE_LIMIT_EXERCISE_REDIS_URL: redis://localhost:6379/15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20.19.0
+          cache: npm
+          cache-dependency-path: pay-guard-backend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:phase10:ci-supply-chain
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:phase10:history
+      - run: npm run test:phase10:evidence-validator
+      - run: npm run test:phase10:alerts
+      - run: npm run test:phase10:alerts:promtool
+      - run: node scripts/phase9-security-scan.cjs
+      - run: npm run security:audit:production
+      - run: npm test
+      - run: npm run test:integration
+      - run: npm run test:v2:integration
+      - run: npm run test:pdf-worker
+      - run: npm run test:phase9:load
+      - run: npm run test:phase10:rate-load
+      - run: npm run build
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - name: Build loadable image for security validation
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: pay-guard-backend
+          load: true
+          tags: payguard-backend:ci
+          build-args: |
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha,scope=backend-container
+          cache-to: type=gha,mode=max,scope=backend-container
+      - name: Reject critical and high container vulnerabilities
+        uses: docker/scout-action@481412c8b8de36d0f79e85aa382c60397466feb6 # v1
+        with:
+          command: cves
+          image: local://payguard-backend:ci
+          only-severities: critical,high
+          exit-code: true
+          write-comment: false
+      - name: Build worker image for security validation
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: pay-guard-backend
+          target: worker
+          load: true
+          tags: payguard-worker:ci
+          build-args: |
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha,scope=backend-container
+      - name: Reject critical and high worker-image vulnerabilities
+        uses: docker/scout-action@481412c8b8de36d0f79e85aa382c60397466feb6 # v1
+        with:
+          command: cves
+          image: local://payguard-worker:ci
+          only-severities: critical,high
+          exit-code: true
+          write-comment: false
+      - name: Validate API and worker runtime contracts
+        working-directory: pay-guard-backend
+        run: >-
+          node scripts/phase10-container-contract.cjs
+          payguard-backend:ci payguard-worker:ci
+          "${{ github.sha }}" "${{ github.sha }}"
+      - name: Generate and verify SBOM and max-level provenance
+        working-directory: pay-guard-backend
+        run: |
+          mkdir -p "$RUNNER_TEMP/payguard-attestations" \
+            "$RUNNER_TEMP/payguard-worker-attestations"
+          docker scout sbom --format spdx \
+            --output "$RUNNER_TEMP/payguard-attestations/sbom.spdx.json" \
+            local://payguard-backend:ci
+          BUILDX_METADATA_PROVENANCE=max docker buildx build \
+            --build-arg VCS_REF=${{ github.sha }} \
+            --cache-from type=gha,scope=backend-container \
+            --metadata-file "$RUNNER_TEMP/payguard-attestations/provenance.json" \
+            --output type=cacheonly \
+            .
+          test -s "$RUNNER_TEMP/payguard-attestations/sbom.spdx.json"
+          test -s "$RUNNER_TEMP/payguard-attestations/provenance.json"
+          docker scout sbom --format spdx \
+            --output "$RUNNER_TEMP/payguard-worker-attestations/sbom.spdx.json" \
+            local://payguard-worker:ci
+          BUILDX_METADATA_PROVENANCE=max docker buildx build \
+            --target worker \
+            --build-arg VCS_REF=${{ github.sha }} \
+            --cache-from type=gha,scope=backend-container \
+            --metadata-file "$RUNNER_TEMP/payguard-worker-attestations/provenance.json" \
+            --output type=cacheonly \
+            .
+          test -s "$RUNNER_TEMP/payguard-worker-attestations/sbom.spdx.json"
+          test -s "$RUNNER_TEMP/payguard-worker-attestations/provenance.json"
+          node -e 'for (const file of process.argv.slice(1)) { const value = require(file); if (!value["buildx.build.provenance"]) throw new Error(`${file}: full provenance missing`); }' \
+            "$RUNNER_TEMP/payguard-attestations/provenance.json" \
+            "$RUNNER_TEMP/payguard-worker-attestations/provenance.json"
+      - name: Retain container attestations
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: payguard-container-attestations-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/payguard-attestations/sbom.spdx.json
+            ${{ runner.temp }}/payguard-attestations/provenance.json
+            ${{ runner.temp }}/payguard-worker-attestations/sbom.spdx.json
+            ${{ runner.temp }}/payguard-worker-attestations/provenance.json
+          if-no-files-found: error
+          retention-days: 30

@@ -1,7 +1,7 @@
 # Phase 3 Verify.ET Validation
 
-Date: 2026-08-06  
-Status: Increments 1-4 implemented; final vendor contract and credentials pending
+Date: 2026-08-14  
+Status: Official REST and webhook contract implemented; sandbox credentials pending
 
 ## Increment 1 - Disabled-by-default provider security boundary
 
@@ -13,8 +13,8 @@ Implemented:
   fragment and a managed API key of at least 32 characters.
 - The provider API key must be distinct from JWT, account-encryption and object-
   storage secrets.
-- Provider timeout is bounded to 500-30,000 ms and response bodies are configured
-  with a 1 KiB-1 MiB limit for the future transport adapter.
+- Provider timeout is bounded to 500-30,000 ms and streamed response bodies enforce
+  a 1 KiB-1 MiB configured upper bound.
 - Credential access is isolated inside `VerifyEtModule`; disabled access fails closed
   with a sanitized error.
 - HTTP status policy maps 401, 402, 403, 409, 422, 429 and 503 to stable internal
@@ -23,13 +23,15 @@ Implemented:
   forbidden, conflict and validation failures are not.
 - `Retry-After` delta-seconds and HTTP-date values are parsed and capped at 24 hours.
 
-Contract boundary:
+Official contract implementation:
 
-- No endpoint path, authorization header scheme, payload shape or webhook signature
-  algorithm is guessed in source.
-- No API route, worker or scheduled job can contact Verify.ET in this increment.
-- `VERIFYET_ENABLED` remains `false` until the final vendor contract and non-exposed
-  test credentials are supplied.
+- Server-to-server authentication uses `x-api-key`.
+- Initial verification uses `POST /api/verify?waitMs={bounded}` with
+  `Idempotency-Key`; queued work uses `GET /api/verify/:requestId`.
+- CBE, BOA, Telebirr, M-Pesa, CBEBirr, Dashen, Awash, Siinqee and Kaafiebirr request
+  shapes follow the documented bank-specific fields; direct Zemen submission fails
+  before transport because the provider documents it as unsupported.
+- `VERIFYET_ENABLED` remains `false` until a non-exposed scoped API key is supplied.
 
 Validation evidence:
 
@@ -39,7 +41,7 @@ Validation evidence:
 - [x] Error messages contain no API key, provider body or raw network detail.
 - [x] Lint and production build pass.
 - [x] Full unit regression passes: 31 suites and 159 tests.
-- [x] No dependency or lockfile changes.
+- [x] Concrete Fetch transport uses only Node's bounded server-side HTTP client.
 
 ## Increment 2 - Idempotency and sanitized provider history
 
@@ -73,10 +75,12 @@ Validation evidence:
 
 Implemented:
 
-- A provider-neutral signature-verifier interface receives the exact raw bytes and
-  headers required by a future vendor implementation.
-- The registered default verifier always denies delivery, so no webhook is accepted
-  until the documented Verify.ET signing contract is implemented.
+- The concrete verifier checks `X-Webhook-Signature` as
+  `sha256=HMAC_SHA256(secret, timestamp + "." + rawBody)` using a constant-time
+  comparison and the exact bytes captured before JSON parsing.
+- `X-Webhook-Timestamp`, `X-Webhook-Delivery-Id`, and `X-Webhook-Event` are required.
+- `POST /api/v1/webhooks/verify-et` is public only at the HTTP-authentication layer;
+  the HMAC verification is mandatory and fails closed before persistence.
 - Webhook intake is disabled with the rest of Verify.ET and enforces non-empty,
   bounded raw bodies before invoking signature verification.
 - Only successfully verified delivery metadata reaches persistence.
@@ -99,14 +103,15 @@ Validation evidence:
 - [x] Full unit regression passes: 35 suites and 188 tests.
 - [x] Database-backed V2 regression passes: 1 suite and 7 integration tests.
 - [x] Migration `005` applied successfully to the local `payguard_v2` database.
-- [x] No dependency or lockfile changes.
+- [x] `fastify-raw-body` 5.x is route-scoped to the webhook endpoint and compatible
+  with Fastify 5.x.
 
 Contract boundary:
 
-- No signature header, digest algorithm, signed message format, timestamp header or
-  tolerance is guessed.
-- No public webhook controller is exposed until those values and official fixtures
-  are available.
+- Verify.ET documents the signed message and headers but does not document a replay
+  tolerance for `X-Webhook-Timestamp`; PayGuard therefore verifies the exact signed
+  timestamp without inventing a rejection window. Durable delivery-ID deduplication
+  remains the replay defense.
 
 ## Increment 4 - Polling, retry and returned status-URL policy
 
@@ -136,17 +141,26 @@ Validation evidence:
 - [x] Database-backed V2 regression passes: 1 suite and 7 integration tests.
 - [x] No migration, dependency or lockfile changes.
 
-Contract boundary:
+Official contract implementation:
 
-- The transport worker is not enabled because submit/status endpoint schemas and
-  terminal/pending provider status values are still unavailable.
-- Returned status URLs are validated but are not persisted because the vendor has
-  not confirmed whether they contain bearer credentials or how they are renewed.
+- `queued` and `running` are pending; `completed` and `failed` are terminal.
+- A 202 submit result stores the provider `requestId`; later rechecks poll the fixed
+  documented status endpoint instead of creating a second verification request.
+- Completed success results are normalized into PayGuard's strict bank, reference,
+  amount, receiver-suffix and provider-timestamp matching boundary before posting.
+- Returned status URLs are treated as navigation hints only, validated to the
+  configured provider origin, and never used to bypass the fixed endpoint policy.
 
-## Required next inputs
+## Activation inputs
 
-- Verify.ET test base URL and endpoint paths.
-- API authentication header/scheme specification.
-- Submit/status/events/history request and response schemas.
-- Webhook signing algorithm, signed bytes, timestamp tolerance and delivery-ID field.
-- Provider contract fixtures for every documented success and error response.
+- A Verify.ET API key scoped with `verification:write` and `verification:read`.
+- The webhook secret configured for the same Verify.ET account when webhook delivery
+  is enabled.
+- A publicly reachable HTTPS value for `VERIFYET_WEBHOOK_URL` in deployed
+  environments.
+- Provider sandbox references/receipts for CBE and Telebirr end-to-end smoke tests.
+
+Contract sources:
+
+- `https://verify.et/docs/api`
+- `https://verify.et/docs/sdk`

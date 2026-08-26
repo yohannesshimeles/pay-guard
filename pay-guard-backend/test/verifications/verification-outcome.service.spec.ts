@@ -8,6 +8,7 @@ import { PendingRecheckDao } from '../../src/verifications/pending-recheck.dao';
 import { VerificationAttemptDao } from '../../src/verifications/verification-attempt.dao';
 import { VerificationOutcomeService } from '../../src/verifications/verification-outcome.service';
 import { VerificationTransitionDao } from '../../src/verifications/verification-transition.dao';
+import { V2AuditService } from '../../src/audit/v2-audit.service';
 
 describe('VerificationOutcomeService', () => {
   const one = jest.fn();
@@ -19,11 +20,13 @@ describe('VerificationOutcomeService', () => {
   const finalizeWithin = jest.fn();
   const transitionWithin = jest.fn();
   const scheduleWithin = jest.fn();
+  const recordSystemWithin = jest.fn();
   const service = new VerificationOutcomeService(
     { transaction } as unknown as CentralDao,
     { finalizeWithin } as unknown as VerificationAttemptDao,
     { transitionWithin } as unknown as VerificationTransitionDao,
     { scheduleWithin } as unknown as PendingRecheckDao,
+    { recordSystemWithin } as unknown as V2AuditService,
   );
   const requestedAt = new Date('2026-08-06T12:00:00.000Z');
   const respondedAt = new Date('2026-08-06T12:00:01.250Z');
@@ -105,6 +108,9 @@ describe('VerificationOutcomeService', () => {
       scheduledAt: nextRecheckAt,
     });
     expect(transaction).toHaveBeenCalledTimes(1);
+    expect(recordSystemWithin).toHaveBeenCalledWith(databaseTransaction,
+      expect.objectContaining({ actionType: 'VERIFICATION_OUTCOME_PENDING',
+        businessId: 'business-id', branchId: 'branch-id' }));
   });
 
   it('records a sanitized terminal failure without creating another job', async () => {
@@ -129,6 +135,9 @@ describe('VerificationOutcomeService', () => {
       recheckLimitReached: false,
     });
     expect(scheduleWithin).not.toHaveBeenCalled();
+    expect(recordSystemWithin).toHaveBeenCalledWith(databaseTransaction,
+      expect.objectContaining({ actionType: 'VERIFICATION_OUTCOME_FAILED',
+        failureReason: 'PROVIDER_REJECTED' }));
   });
 
   it('replays a persisted outcome without repeating transition or schedule', async () => {
@@ -150,6 +159,7 @@ describe('VerificationOutcomeService', () => {
     ).resolves.toMatchObject({ replayed: true, nextRecheckNumber: 1 });
     expect(transitionWithin).not.toHaveBeenCalled();
     expect(scheduleWithin).not.toHaveBeenCalled();
+    expect(recordSystemWithin).not.toHaveBeenCalled();
   });
 
   it('stops scheduling after the third completed recheck without inventing a terminal result', async () => {

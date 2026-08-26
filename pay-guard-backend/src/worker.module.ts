@@ -6,6 +6,10 @@ import { NotificationModule } from './notifications/notification.module';
 import { NotificationWorkerRunner } from './notifications/notification-worker.runner';
 import { ReportsModule } from './reports/reports.module';
 import { ReportExportWorkerRunner } from './reports/report-export-worker.runner';
+import { ArchiveModule } from './archive/archive.module';
+import { ArchiveWorkerRunner } from './archive/archive-worker.runner';
+import { VerifyEtModule } from './verify-et/verify-et.module';
+import { VerifyEtWorkerRunner } from './verify-et/verify-et-worker.runner';
 
 @Module({})
 export class WorkerModule {
@@ -14,8 +18,12 @@ export class WorkerModule {
       module: WorkerModule,
       imports: [
         AppModule.register(config), QueuesModule, NotificationModule, ReportsModule,
+        ArchiveModule, VerifyEtModule,
       ],
-      providers: [NotificationWorkerRunner, ReportExportWorkerRunner],
+      providers: [
+        NotificationWorkerRunner, ReportExportWorkerRunner, ArchiveWorkerRunner,
+        VerifyEtWorkerRunner,
+      ],
     };
   }
 }

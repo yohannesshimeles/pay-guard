@@ -1,5 +1,11 @@
 import { OpenAPIObject } from '@nestjs/swagger';
-import { createPostmanCollection } from '../../src/documentation/postman-collection';
+import { readFileSync } from 'node:fs';
+import {
+  createPostmanCollection,
+  createPostmanEnvironment,
+  PostmanCollection,
+  PostmanEnvironment,
+} from '../../src/documentation/postman-collection';
 
 describe('Postman collection generation', () => {
   it('creates one request for every OpenAPI operation', () => {
@@ -56,5 +62,39 @@ describe('Postman collection generation', () => {
     expect(requests.find((item) => item.name === 'Log in')?.request.auth).toEqual({
       type: 'noauth',
     });
+  });
+
+  it('keeps every committed Postman asset in exact OpenAPI parity', () => {
+    const document = JSON.parse(
+      readFileSync('docs/api/openapi.json', 'utf8'),
+    ) as OpenAPIObject;
+    const committedCollection = JSON.parse(
+      readFileSync('postman/PayGuard.postman_collection.json', 'utf8'),
+    ) as PostmanCollection;
+    const committedEnvironment = JSON.parse(
+      readFileSync('postman/PayGuard-Local.postman_environment.json', 'utf8'),
+    ) as PostmanEnvironment;
+    const expectedCollection = JSON.parse(JSON.stringify(
+      createPostmanCollection(document),
+    )) as PostmanCollection;
+    const expectedEnvironment = createPostmanEnvironment(expectedCollection);
+
+    expect(committedCollection).toEqual(expectedCollection);
+    expect(committedEnvironment).toEqual(expectedEnvironment);
+
+    const operations = Object.values(document.paths).reduce(
+      (count, path) => count + Object.keys(path).filter((method) =>
+        ['get', 'post', 'put', 'patch', 'delete', 'options', 'head']
+          .includes(method),
+      ).length,
+      0,
+    );
+    const requests = committedCollection.item.flatMap((folder) => folder.item);
+    expect(requests).toHaveLength(operations);
+    expect(new Set(requests.map((item) =>
+      `${String(item.request.method)} ${String(
+        (item.request.url as { raw: string }).raw,
+      )}`,
+    )).size).toBe(operations);
   });
 });

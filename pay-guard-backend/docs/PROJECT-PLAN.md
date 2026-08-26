@@ -90,7 +90,7 @@ Exit: all test-checklist release gates pass and launch approval is recorded.
 ## Required external inputs
 
 - New, non-exposed Verify.ET production API key and scoped permissions.
-- Verify.ET webhook secret and exact signature specification.
+- Verify.ET webhook secret configured for the PayGuard callback.
 - Confirmed Platform subscription settlement accounts for supported banks.
 - Final QR formats and bank-specific receipt samples.
 - Production domains, hosting and object-storage location.

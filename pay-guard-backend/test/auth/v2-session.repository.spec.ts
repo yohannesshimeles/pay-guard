@@ -17,8 +17,10 @@ describe('V2SessionRepository', () => {
 
   it('validates context before creating a business session', async () => {
     client.query
-      .mockResolvedValueOnce({ rowCount: 1, rows: [{ '?column?': 1 }] })
-      .mockResolvedValueOnce({ rows: [{ id: 'session-1' }] });
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ role_code: 'MANAGER' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'session-1' }] })
+      .mockResolvedValueOnce({ rows: [] });
 
     await expect(
       repository.createBusinessSession({
@@ -30,10 +32,15 @@ describe('V2SessionRepository', () => {
         expiresAt: new Date('2026-09-01T00:00:00.000Z'),
         devicePlatform: 'web',
       }),
-    ).resolves.toEqual({ sessionId: 'session-1' });
+    ).resolves.toEqual({ sessionId: 'session-1', replacedSessionIds: [] });
 
     expect(client.query).toHaveBeenNthCalledWith(
       1,
+      expect.stringContaining('pg_advisory_xact_lock'),
+      ['00000000-0000-0000-0000-000000000001'],
+    );
+    expect(client.query).toHaveBeenNthCalledWith(
+      2,
       expect.stringContaining("membership.status = 'ACTIVE'"),
       expect.arrayContaining([
         '00000000-0000-0000-0000-000000000001',
@@ -41,19 +48,21 @@ describe('V2SessionRepository', () => {
       ]),
     );
     expect(client.query).toHaveBeenNthCalledWith(
-      2,
+      3,
       expect.stringContaining('INSERT INTO user_sessions'),
       expect.arrayContaining(['a'.repeat(64)]),
     );
     expect(client.query).toHaveBeenNthCalledWith(
-      3,
+      4,
       expect.stringContaining("role_assignment.role_code = 'WAITER'"),
       expect.arrayContaining(['session-1', 'web']),
     );
   });
 
   it('rejects a stale or forged authorization context', async () => {
-    client.query.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+    client.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] });
 
     await expect(
       repository.createBusinessSession({
@@ -64,7 +73,33 @@ describe('V2SessionRepository', () => {
         expiresAt: new Date('2026-09-01T00:00:00.000Z'),
       }),
     ).rejects.toThrow('Active authorization context not found');
-    expect(client.query).toHaveBeenCalledTimes(1);
+    expect(client.query).toHaveBeenCalledTimes(2);
+  });
+
+  it('revokes prior sessions before inserting a replacement Waiter device', async () => {
+    client.query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ role_code: 'WAITER' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'old-session' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'new-session' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(repository.createBusinessSession({
+      userId: '00000000-0000-0000-0000-000000000001',
+      membershipId: '00000000-0000-0000-0000-000000000002',
+      membershipRoleId: '00000000-0000-0000-0000-000000000003',
+      workAssignmentId: '00000000-0000-0000-0000-000000000004',
+      refreshTokenHash: 'a'.repeat(64),
+      expiresAt: new Date('2026-09-01T00:00:00.000Z'),
+      devicePlatform: 'ios',
+    })).resolves.toEqual({
+      sessionId: 'new-session', replacedSessionIds: ['old-session'],
+    });
+    expect(client.query).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('Replaced by a new Waiter device session'),
+      ['00000000-0000-0000-0000-000000000001'],
+    );
   });
 
   it('finds an active platform administrator session after checking user sessions', async () => {

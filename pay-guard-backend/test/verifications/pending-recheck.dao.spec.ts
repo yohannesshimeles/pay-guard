@@ -5,6 +5,7 @@ import {
   PendingRecheckDao,
   PendingRecheckScheduleConflictError,
 } from '../../src/verifications/pending-recheck.dao';
+import { V2AuditService } from '../../src/audit/v2-audit.service';
 
 describe('PendingRecheckDao', () => {
   const one = jest.fn<
@@ -19,10 +20,11 @@ describe('PendingRecheckDao', () => {
     Promise<unknown>,
     [(current: DaoTransaction) => Promise<unknown>]
   >((work) => work({ one, optional } as unknown as DaoTransaction));
+  const recordSystemWithin = jest.fn();
   const dao = new PendingRecheckDao({
     transaction,
     optional,
-  } as unknown as CentralDao);
+  } as unknown as CentralDao, { recordSystemWithin } as unknown as V2AuditService);
   const scheduledAt = new Date('2026-08-06T12:05:00.000Z');
   const createdAt = new Date('2026-08-06T12:00:00.000Z');
   const scheduledRow = {
@@ -175,5 +177,31 @@ describe('PendingRecheckDao', () => {
     await expect(
       dao.completeClaim('recheck-id', 'stale-token', 'attempt-id'),
     ).rejects.toThrow(PendingRecheckClaimLostError);
+  });
+
+  it('atomically audits provider retry scheduling without claim credentials', async () => {
+    optional.mockResolvedValueOnce({ ...scheduledRow,
+      last_error_code: 'RATE_LIMITED' });
+    await dao.deferClaim('recheck-id', 'claim-token', scheduledAt, 'RATE_LIMITED');
+    const calls = recordSystemWithin.mock.calls as unknown as Array<[unknown, {
+      actionType: string; businessId: string; branchId: string;
+      newValue: Record<string, unknown>;
+    }]>;
+    const event = calls[0][1];
+    expect(event).toMatchObject({ actionType: 'PROVIDER_RETRY_SCHEDULED',
+      businessId: 'business-id', branchId: 'branch-id' });
+    expect(event.newValue).not.toHaveProperty('claimToken');
+  });
+
+  it('atomically audits provider pause with a sanitized failure code', async () => {
+    optional.mockResolvedValueOnce({ ...scheduledRow,
+      status: PendingRecheckStatus.PAUSED_PROVIDER,
+      pause_reason: 'AUTHENTICATION_FAILED',
+      last_error_code: 'AUTHENTICATION_FAILED', paused_at: new Date() });
+    await dao.pauseClaim('recheck-id', 'claim-token',
+      PendingRecheckStatus.PAUSED_PROVIDER, 'AUTHENTICATION_FAILED');
+    expect(recordSystemWithin).toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ actionType: 'PROVIDER_RECHECK_PAUSED',
+        failureReason: 'AUTHENTICATION_FAILED' }));
   });
 });

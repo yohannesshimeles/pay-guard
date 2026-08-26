@@ -3,6 +3,7 @@ import {
   VerifyEtWebhookDeliveryConflictError,
   VerifyEtWebhookDeliveryDao,
 } from '../../src/verify-et/verify-et-webhook-delivery.dao';
+import { V2AuditService } from '../../src/audit/v2-audit.service';
 
 const now = new Date('2026-08-06T12:00:00.000Z');
 const deliveryRow = {
@@ -40,7 +41,10 @@ describe('VerifyEtWebhookDeliveryDao', () => {
     work({ optional, one: transactionOne } as unknown as DaoTransaction),
   );
   const centralDao = { optional, one, transaction } as unknown as CentralDao;
-  const deliveries = new VerifyEtWebhookDeliveryDao(centralDao);
+  const recordSystemWithin = jest.fn();
+  const deliveries = new VerifyEtWebhookDeliveryDao(centralDao, {
+    recordSystemWithin,
+  } as unknown as V2AuditService);
   const input = {
     deliveryId: deliveryRow.delivery_id,
     eventType: deliveryRow.event_type,
@@ -63,6 +67,8 @@ describe('VerifyEtWebhookDeliveryDao', () => {
     expect(values[2]).toMatch(/^[a-f0-9]{64}$/u);
     expect(JSON.stringify(values)).not.toContain('do-not-store');
     expect(transactionOne).not.toHaveBeenCalled();
+    expect(recordSystemWithin).toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ actionType: 'PROVIDER_WEBHOOK_RECEIVED' }));
   });
 
   it('recognizes an exact duplicate under a row lock', async () => {
@@ -122,13 +128,15 @@ describe('VerifyEtWebhookDeliveryDao', () => {
     expect(optional.mock.calls[0][0]).toContain(
       "delivery_status IN ('RECEIVED','FAILED')",
     );
+    expect(recordSystemWithin).toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ actionType: 'PROVIDER_WEBHOOK_PROCESSING' }));
 
     optional.mockResolvedValueOnce(undefined);
     await expect(deliveries.claim(deliveryRow.id)).resolves.toBeUndefined();
   });
 
   it('finishes only a currently processing delivery', async () => {
-    one.mockResolvedValue({
+    transactionOne.mockResolvedValue({
       ...deliveryRow,
       delivery_status: 'PROCESSED',
       processing_attempts: 1,
@@ -138,7 +146,11 @@ describe('VerifyEtWebhookDeliveryDao', () => {
     await expect(
       deliveries.finish(deliveryRow.id, { succeeded: true }),
     ).resolves.toMatchObject({ status: 'PROCESSED', processedAt: now });
-    expect(one.mock.calls[0][0]).toContain("delivery_status = 'PROCESSING'");
+    expect(transactionOne.mock.calls[0][0]).toContain(
+      "delivery_status = 'PROCESSING'",
+    );
+    expect(recordSystemWithin).toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ actionType: 'PROVIDER_WEBHOOK_PROCESSED' }));
   });
 
   it('requires a sanitized error code for failed processing', async () => {
@@ -157,6 +169,6 @@ describe('VerifyEtWebhookDeliveryDao', () => {
         errorCode: 'SHOULD_NOT_EXIST',
       }),
     ).rejects.toThrow('cannot have an error code');
-    expect(one).not.toHaveBeenCalled();
+    expect(transactionOne).not.toHaveBeenCalled();
   });
 });

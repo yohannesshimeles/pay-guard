@@ -1,0 +1,118 @@
+groups:
+  - name: payguard-production-protection
+    rules:
+      - alert: PayGuardRateLimitStoreErrors
+        expr: sum(rate(payguard_rate_limit_store_errors_total[2m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+          owner_primary_role: backend-on-call
+          owner_secondary_role: security-on-call
+          runbook: phase10-rate-limit-incident
+        annotations:
+          summary: PayGuard rate-limit enforcement store is failing
+          description: Redis enforcement errors have continued for two minutes; confirm sensitive routes fail closed.
+
+      - alert: PayGuardRateLimitStoreBypass
+        expr: sum(rate(payguard_rate_limit_decisions_total{outcome="store_bypass"}[2m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+          owner_primary_role: backend-on-call
+          owner_secondary_role: security-on-call
+          runbook: phase10-rate-limit-incident
+        annotations:
+          summary: PayGuard general traffic is bypassing rate-limit storage
+          description: General routes are using the measured Redis-outage bypass; restore Redis and review ingress controls.
+
+      - alert: PayGuardRateLimitBlockedRatioHigh
+        expr: sum(rate(payguard_rate_limit_decisions_total{outcome="blocked"}[5m])) / clamp_min(sum(rate(payguard_rate_limit_decisions_total[5m])), 0.001) > 0.20
+        for: 5m
+        labels:
+          severity: warning
+          owner_primary_role: product-operations
+          owner_secondary_role: backend-on-call
+          runbook: phase10-rate-limit-incident
+        annotations:
+          summary: PayGuard blocked-request ratio exceeds the initial safety threshold
+          description: More than 20 percent of rate-limit decisions were blocked for five minutes; check abuse and legitimate shared-NAT concentration.
+
+  - name: payguard-production-workers
+    rules:
+      - alert: PayGuardVerifyEtProviderPaused
+        expr: sum(increase(payguard_worker_results_total{worker="verify_et",outcome="PAUSED_PROVIDER"}[5m])) > 0
+        labels:
+          severity: critical
+          owner_primary_role: payments-on-call
+          owner_secondary_role: security-on-call
+          runbook: phase9-queue-provider-incident
+        annotations:
+          summary: Verify.ET processing paused after a non-retryable provider response
+          description: Keep the provider queue paused, verify managed credentials and acknowledge the operational incident.
+
+      - alert: PayGuardVerifyEtQueueNotDraining
+        expr: sum(increase(payguard_worker_results_total{worker="verify_et",outcome="DEFERRED"}[10m])) > 0 and (sum(increase(payguard_worker_results_total{worker="verify_et",outcome="PROCESSED"}[10m])) or vector(0)) == 0
+        for: 10m
+        labels:
+          severity: critical
+          owner_primary_role: payments-on-call
+          owner_secondary_role: backend-on-call
+          runbook: phase9-queue-provider-incident
+        annotations:
+          summary: Verify.ET work is deferring without successful drain
+          description: Deferred work has accumulated without a processed result; inspect provider health and reclaimable leases.
+
+      - alert: PayGuardVerifyEtWorkerTickFailure
+        expr: sum(increase(payguard_worker_tick_failures_total{worker="verify_et"}[2m])) > 0
+        labels:
+          severity: critical
+          owner_primary_role: backend-on-call
+          owner_secondary_role: payments-on-call
+          runbook: phase9-queue-provider-incident
+        annotations:
+          summary: Verify.ET worker tick failed
+          description: Inspect sanitized worker logs, Redis and PostgreSQL, then confirm a later tick resumes durable processing.
+
+      - alert: PayGuardReportExportWorkerTickFailure
+        expr: sum(increase(payguard_worker_tick_failures_total{worker="report_export"}[5m])) > 0
+        labels:
+          severity: warning
+          owner_primary_role: backend-on-call
+          owner_secondary_role: platform-on-call
+          runbook: phase9-queue-provider-incident
+        annotations:
+          summary: Report export worker tick failed
+          description: Inspect the durable export state and confirm a later tick resumes processing.
+
+      - alert: PayGuardReportExportFailed
+        expr: sum(increase(payguard_worker_results_total{worker="report_export",outcome="FAILED"}[5m])) > 0
+        labels:
+          severity: warning
+          owner_primary_role: backend-on-call
+          owner_secondary_role: platform-on-call
+          runbook: phase9-queue-provider-incident
+        annotations:
+          summary: A PayGuard report export failed
+          description: Inspect the sanitized failure code and retry through the durable export lifecycle.
+
+      - alert: PayGuardArchiveWorkerTickFailure
+        expr: sum(increase(payguard_worker_tick_failures_total{worker="archive"}[2m])) > 0
+        labels:
+          severity: critical
+          owner_primary_role: platform-on-call
+          owner_secondary_role: security-on-call
+          runbook: phase9-queue-provider-incident
+        annotations:
+          summary: Receipt archive worker tick failed
+          description: Protect active evidence, inspect storage and database health, and confirm durable recovery.
+
+      - alert: PayGuardNotificationWorkerTickFailure
+        expr: sum(increase(payguard_worker_tick_failures_total{worker="notification"}[5m])) > 0
+        labels:
+          severity: warning
+          owner_primary_role: backend-on-call
+          owner_secondary_role: platform-on-call
+          runbook: phase9-queue-provider-incident
+        annotations:
+          summary: Notification worker tick failed
+          description: Inspect the durable delivery state and confirm a later tick resumes processing.

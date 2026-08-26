@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { Pool } from 'pg';
+import { describeError } from '../common/safe-error';
 
 export type CutoverCheck = {
   name: string;
@@ -31,15 +32,25 @@ export function validateCutoverEnvironment(
 
   const jwt = environment.JWT_ACCESS_SECRET ?? '';
   const accountKey = environment.ACCOUNT_ENCRYPTION_KEY ?? '';
+  const archiveKey = environment.ARCHIVE_ENCRYPTION_KEY ?? '';
   const placeholders = /(replace|example|generated_value|change-me|password123)/i;
   checks.push(secretCheck('JWT access secret', jwt, placeholders));
   checks.push(secretCheck('Account encryption key', accountKey, placeholders));
+  checks.push(secretCheck('Archive encryption key', archiveKey, placeholders));
   checks.push({
     name: 'Separated cryptographic keys',
     status: jwt.length >= 32 && accountKey.length >= 32 && jwt !== accountKey
       ? 'PASS'
       : 'FAIL',
     detail: 'JWT and account-encryption keys must be distinct',
+  });
+  checks.push({
+    name: 'Separated archive encryption key',
+    status: archiveKey.length >= 32 && archiveKey !== jwt &&
+      archiveKey !== accountKey && archiveKey !== (environment.S3_SECRET_ACCESS_KEY ?? '')
+      ? 'PASS'
+      : 'FAIL',
+    detail: 'Archive encryption key must be distinct from JWT, account and storage keys',
   });
 
   const databaseUrl = environment.DATABASE_URL ?? '';
@@ -279,7 +290,7 @@ export async function runDatabaseCutoverChecks(
     checks.push({
       name: 'Database preflight execution',
       status: 'FAIL',
-      detail: error instanceof Error ? error.message : 'Unknown database error',
+      detail: `Database preflight failed: ${JSON.stringify(describeError(error))}`,
     });
   } finally {
     await pool.end();

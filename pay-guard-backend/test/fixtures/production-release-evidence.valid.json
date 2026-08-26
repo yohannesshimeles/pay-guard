@@ -1,0 +1,125 @@
+{
+  "release": {
+    "id": "release-candidate-alpha",
+    "environment": "staging",
+    "imageDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "windowStart": "2026-08-13T18:00:00Z",
+    "windowEnd": "2026-08-13T19:00:00Z"
+  },
+  "people": {
+    "operator": "Fixture Operator",
+    "approver": "Fixture Approver",
+    "rollbackDecisionOwner": "Fixture Rollback Owner"
+  },
+  "ci": {
+    "status": "PASS",
+    "runEvidence": "https://evidence.invalid/ci/runs/1234567890",
+    "commitSha": "abcdefabcdefabcdefabcdefabcdefabcdefabcd"
+  },
+  "repositorySecurity": {
+    "dependencyGraph": {
+      "status": "PASS",
+      "evidence": "https://evidence.invalid/repository/dependency-graph"
+    },
+    "dependabotAlerts": {
+      "status": "PASS",
+      "evidence": "https://evidence.invalid/repository/dependabot-alerts"
+    },
+    "dependabotSecurityUpdates": {
+      "status": "PASS",
+      "evidence": "https://evidence.invalid/repository/dependabot-security-updates"
+    },
+    "branchProtection": {
+      "status": "PASS",
+      "evidence": "https://evidence.invalid/repository/branch-protection",
+      "requiredChecks": ["dependency-review", "validate", "container"],
+      "requiredApprovingReviews": 1,
+      "dismissStaleApprovals": true,
+      "requireConversationResolution": true,
+      "blockForcePushes": true,
+      "blockDeletions": true
+    }
+  },
+  "infrastructure": {
+    "tls": {
+      "status": "PASS",
+      "evidence": "https://evidence.invalid/tls/alpha"
+    },
+    "waf": {
+      "status": "PASS",
+      "evidence": "https://evidence.invalid/waf/alpha",
+      "approvedAuthPolicy": "Dual subject policy approved for fixture traffic"
+    },
+    "secretManager": {
+      "status": "PASS",
+      "evidence": "https://evidence.invalid/secrets/alpha"
+    }
+  },
+  "verifyEt": {
+    "status": "PASS",
+    "keyReference": "managed-reference-fixture-alpha",
+    "webhookSpecificationVersion": "vendor-spec-alpha",
+    "callbackUrl": "https://callback.invalid/webhooks/verify-et",
+    "drillEvidence": "https://evidence.invalid/verify-et/alpha"
+  },
+  "bankApprovals": {
+    "status": "PASS",
+    "approvedReceivingAccounts": 1,
+    "approvedQrSamples": 1,
+    "evidence": "https://evidence.invalid/banks/alpha"
+  },
+  "drills": {
+    "backupRestore": {
+      "status": "PASS",
+      "evidence": "https://evidence.invalid/drills/backup",
+      "exercisedAt": "2026-08-12T10:00:00Z"
+    },
+    "archiveKeyRotation": {
+      "status": "PASS",
+      "evidence": "https://evidence.invalid/drills/archive",
+      "exercisedAt": "2026-08-12T11:00:00Z"
+    },
+    "providerOutage": {
+      "status": "PASS",
+      "evidence": "https://evidence.invalid/drills/provider",
+      "exercisedAt": "2026-08-12T12:00:00Z"
+    },
+    "queueReplay": {
+      "status": "PASS",
+      "evidence": "https://evidence.invalid/drills/queue",
+      "exercisedAt": "2026-08-12T13:00:00Z"
+    },
+    "deploymentRollback": {
+      "status": "PASS",
+      "evidence": "https://evidence.invalid/drills/rollback",
+      "exercisedAt": "2026-08-12T14:00:00Z"
+    }
+  },
+  "alertOwners": {
+    "backend": {
+      "primary": "Backend Primary Fixture",
+      "secondary": "Backend Secondary Fixture",
+      "acknowledgementEvidence": "https://evidence.invalid/owners/backend"
+    },
+    "payments": {
+      "primary": "Payments Primary Fixture",
+      "secondary": "Payments Secondary Fixture",
+      "acknowledgementEvidence": "https://evidence.invalid/owners/payments"
+    },
+    "security": {
+      "primary": "Security Primary Fixture",
+      "secondary": "Security Secondary Fixture",
+      "acknowledgementEvidence": "https://evidence.invalid/owners/security"
+    },
+    "platform": {
+      "primary": "Platform Primary Fixture",
+      "secondary": "Platform Secondary Fixture",
+      "acknowledgementEvidence": "https://evidence.invalid/owners/platform"
+    },
+    "productOperations": {
+      "primary": "Product Operations Primary Fixture",
+      "secondary": "Product Operations Secondary Fixture",
+      "acknowledgementEvidence": "https://evidence.invalid/owners/product-operations"
+    }
+  }
+}

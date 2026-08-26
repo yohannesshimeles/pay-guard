@@ -5,6 +5,9 @@ import { VerifyEtProviderError } from './verify-et-provider.error';
 export type EnabledVerifyEtConfig = Readonly<{
   baseUrl: string;
   apiKey: string;
+  webhookUrl?: string;
+  webhookSecret?: string;
+  waitMs: number;
   timeoutMs: number;
   maxResponseBytes: number;
   maxPollAttempts: number;
@@ -24,6 +27,9 @@ export class VerifyEtCredentialService {
     return Object.freeze({
       baseUrl: provider.baseUrl,
       apiKey: provider.apiKey,
+      webhookUrl: provider.webhookUrl,
+      webhookSecret: provider.webhookSecret,
+      waitMs: provider.waitMs,
       timeoutMs: provider.timeoutMs,
       maxResponseBytes: provider.maxResponseBytes,
       maxPollAttempts: provider.maxPollAttempts,

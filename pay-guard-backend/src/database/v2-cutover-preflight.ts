@@ -3,6 +3,7 @@ import {
   runDatabaseCutoverChecks,
   validateCutoverEnvironment,
 } from './v2-cutover-checks';
+import { describeError } from '../common/safe-error';
 
 async function main(): Promise<void> {
   const environmentChecks = validateCutoverEnvironment(process.env);
@@ -34,9 +35,7 @@ async function main(): Promise<void> {
 
 void main().catch((error: unknown) => {
   process.stderr.write(
-    `V2 cutover preflight failed: ${
-      error instanceof Error ? error.message : 'Unknown error'
-    }\n`,
+    `V2 cutover preflight failed: ${JSON.stringify(describeError(error))}\n`,
   );
   process.exitCode = 1;
 });

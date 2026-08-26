@@ -34,14 +34,17 @@ Source authority: Revised Compiled Project Plan, Version 2.0, July 2026.
       replacement/supersession history.
 - [x] Staff dependency/removal rules and historical visibility.
 - [x] Account encryption, masking and suffix derivation.
-- [ ] Account/log redaction scan across the complete application log surface.
+- [x] Account/log redaction scan across the complete application log surface. Static
+      source rules reject raw errors and request headers/body/URL/query in logs; unit,
+      HTTP integration and container-startup exercises inject sensitive markers.
 
 ## Database/integration tests
 
 - [x] Cross-business and cross-branch repository isolation for Phase 2 modules.
 - [x] Unique active settlement account per bank/branch.
 - [ ] Unique provider request, webhook delivery and confirmation keys.
-- [ ] One active Waiter device session.
+- [x] One active Waiter device session, including serialized concurrent enforcement,
+      automatic second-device invalidation and audited replacement.
 - [x] Posted ledger and financial source entries cannot be changed/deleted by
       application paths.
 - [x] Concurrent identical verification posts balance once. Two distinct queued
@@ -118,7 +121,8 @@ Source authority: Revised Compiled Project Plan, Version 2.0, July 2026.
       the requester and expose no private storage key.
 - [x] Export worker lease, retry, checksum, CSV injection, expiry and download-history
       unit/integration checks pass.
-- [ ] Production-sized report/export load thresholds are exercised.
+- [x] Production-sized report/export load thresholds are exercised with exact
+      financial/operational reconciliation and a rollback-only `_test` database guard.
 
 ## Phase 9 audit acceptance
 
@@ -132,18 +136,69 @@ Source authority: Revised Compiled Project Plan, Version 2.0, July 2026.
 - [x] Audit filters are validated and pagination/range limits are bounded.
 - [x] 94 unit suites / 454 tests and 27 PostgreSQL V2 integration tests pass for
       Audit increment 1 with migration 045 included in clean test setup.
-- [ ] Audit coverage matrix has no missing sensitive action.
+- [x] Audit coverage matrix has no missing sensitive action in implemented surfaces.
   - [x] Implemented authenticated transaction, proof, report-export,
         notification-preference and notification-device gaps are covered atomically.
   - [x] PostgreSQL integration verifies all seven Increment 2 action types.
-  - [ ] Background provider/report system lifecycle gaps are covered.
+  - [x] Background report export ready/retry/failure/expiry events are audited.
+  - [x] Background provider request, outcome, retry, pause and signed-webhook
+        lifecycle events are audited atomically without raw provider payloads.
 
-- [ ] RBAC matrix and IDOR tests for every query/mutation/export.
-- [ ] Session refresh rotation, revocation and replaced-device behavior.
-- [ ] Secret/account/password/raw-payload leakage scan across logs and errors.
-- [ ] Malicious PDF/image, MIME confusion, oversized file and signed-URL tests.
-- [ ] Verification burst, webhook burst, pending queue and report export load tests.
-- [ ] Queue failure/dead-letter/replay and provider outage tests.
-- [ ] Encrypted backup restoration and archive retrieval test.
-- [ ] Dependency, secret, static-analysis and vulnerability scans pass.
+## Phase 9 archive acceptance
+
+- [x] One-year receipt eligibility and active-query exclusion are enforced in SQL.
+- [x] Source and archived package integrity are verified before active removal.
+- [x] Archive packages use authenticated application encryption and protected storage.
+- [x] Source deletion is post-commit, retryable and independently auditable.
+- [x] Retrieval requires Platform Super Admin identity, reason and fresh integrity
+      verification, and writes immutable retrieval history/audit evidence.
+- [x] Unit tests cover tamper rejection, corruption compensation, authorization and
+      deletion failure recovery; migration 046 is included in clean V2 setup.
+- [x] Object-storage-backed archive/retrieval exercise passes with a 16 MiB receipt,
+      KMS-enabled S3-compatible storage, exact SHA-256/byte recovery, confirmed source
+      deletion and complete lifecycle audit evidence.
+- [ ] Production managed-key rotation and recovery drill.
+
+- [x] RBAC matrix and IDOR metadata/source-contract tests cover every controller route,
+      with exact public allowlisting and actor-bound identifier operations.
+- [x] Session refresh rotation, replay rejection, logout revocation and automatic
+      Waiter replaced-device behavior pass service and PostgreSQL integration tests.
+- [x] Secret/account/password/raw-payload leakage scan across application logs and HTTP
+      errors, with regression tests and a repeatable production-source scan.
+- [x] Malicious PDF/image, active-PDF, MIME confusion, oversized file and private
+      object-access tests pass, with a repeatable signed-URL/storage-key exposure scan.
+- [x] Verification transition/concurrency, webhook replay burst, pending lease burst and
+      250k-ledger/100k-attempt report export load tests pass.
+- [x] Queue lease recovery, durable pause/defer (dead-letter equivalent), idempotent
+      replay and provider outage/status-policy tests pass; the Verify.ET runner is wired.
+- [x] Authenticated encrypted backup restoration and post-restore archive retrieval pass.
+- [x] Dependency, tracked-secret, lint/typecheck static-analysis and vulnerability scans pass.
 - [ ] Production monitoring alerts and incident runbooks are exercised.
+      - [x] Deployable Prometheus rules cover the rate-limit, Verify.ET, report,
+            archive and notification conditions using fixed-cardinality signals.
+      - [ ] Named primary/secondary people receive and acknowledge every alert in
+            production-equivalent infrastructure.
+
+## Phase 10 hardening acceptance
+
+- [x] Redis-backed rate-limit policy, quota, hashed-client-key, HTTP 429 and
+      store-failure behavior are covered by unit tests.
+- [x] Production configuration cannot disable application rate limiting and proxy
+      trust is constrained to an explicit bounded hop count.
+- [x] Rate-limit allowed, blocked, store-error and general-route bypass states expose
+      Prometheus-compatible signals without raw client addresses.
+- [ ] Production-equivalent WAF/ingress and Redis load validate thresholds for
+      expected shared-NAT and mobile-client traffic.
+      - [x] Repeatable four-replica real-Redis boundary, mobile, shared-NAT and outage
+            rehearsal passes; shared-NAT evidence requires a production policy decision.
+      - [ ] Approved traffic distribution and ingress/WAF exercise validate final limits.
+- [ ] Individual primary/secondary alert owners acknowledge and exercise the
+      Redis/rate-limit incident procedure.
+- [x] All-reachable-commit repository-history scan rejects real secret material and
+      non-fixture full account numbers without printing matched values.
+- [x] API and worker container contracts verify distinct entry commands, role-correct
+      health behavior, unprivileged execution, revision labels, runtime cleanup and
+      migration assets; CI scans and emits SBOM/provenance for both targets.
+- [x] Independent API/worker production startup rehearsal verifies liveness or stable
+      worker bootstrap, invalid-configuration rejection, startup-log secret-marker
+      absence and ownership-scoped container cleanup.

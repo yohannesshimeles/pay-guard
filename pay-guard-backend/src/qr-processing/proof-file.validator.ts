@@ -21,6 +21,9 @@ const extensionsByMimeType: Record<ProofMimeType, readonly string[]> = {
   'application/pdf': ['.pdf'],
 };
 
+const activePdfFeature =
+  /\/(?:JavaScript|OpenAction|AA|Launch|EmbeddedFile|RichMedia|XFA)\b/iu;
+
 @Injectable()
 export class ProofFileValidator {
   private readonly maxBytes: number;
@@ -59,6 +62,12 @@ export class ProofFileValidator {
       throw new BadRequestException(
         'Proof content does not match its declared type',
       );
+    }
+    if (
+      input.mimeType === ProofMimeType.PDF &&
+      activePdfFeature.test(Buffer.from(input.body).toString('latin1'))
+    ) {
+      throw new BadRequestException('Proof PDF contains unsupported active content');
     }
 
     return {

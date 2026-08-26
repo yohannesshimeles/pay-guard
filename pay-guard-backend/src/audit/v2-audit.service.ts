@@ -47,6 +47,24 @@ export class V2AuditService {
     await this.write((text, values) => transaction.query(text, values), event);
   }
 
+  async recordSystemWithin(
+    transaction: DaoTransaction,
+    event: Omit<V2AuditEvent, 'actor' | 'sessionId'>,
+  ): Promise<void> {
+    await transaction.query(
+      `INSERT INTO audit_logs (
+         action_type, record_type, record_id, business_id, branch_id,
+         previous_value, new_value, reason, result, failure_reason, correlation_id
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [event.actionType, event.recordType, event.recordId ?? null,
+       event.businessId ?? null, event.branchId ?? null,
+       serializeMetadata(event.previousValue), serializeMetadata(event.newValue),
+       sanitizeAuditText(event.reason), event.result ?? 'SUCCESS',
+       sanitizeAuditText(event.failureReason),
+       requestContext.getStore()?.correlationId ?? 'system'],
+    );
+  }
+
   private async write(
     query: (text: string, values: readonly unknown[]) => Promise<unknown>,
     event: V2AuditEvent,

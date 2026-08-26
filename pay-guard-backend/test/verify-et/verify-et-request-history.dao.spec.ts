@@ -3,6 +3,7 @@ import {
   VerifyEtIdempotencyConflictError,
   VerifyEtRequestHistoryDao,
 } from '../../src/verify-et/verify-et-request-history.dao';
+import { V2AuditService } from '../../src/audit/v2-audit.service';
 
 const createdAt = new Date('2026-08-06T10:00:00.000Z');
 const requestRow = {
@@ -42,7 +43,10 @@ describe('VerifyEtRequestHistoryDao', () => {
     work({ optional, one: transactionOne } as unknown as DaoTransaction),
   );
   const centralDao = { transaction, one } as unknown as CentralDao;
-  const history = new VerifyEtRequestHistoryDao(centralDao);
+  const recordSystemWithin = jest.fn();
+  const history = new VerifyEtRequestHistoryDao(centralDao, {
+    recordSystemWithin,
+  } as unknown as V2AuditService);
   const reserveInput = {
     verificationAttemptId: requestRow.verification_attempt_id,
     operation: requestRow.operation,
@@ -71,6 +75,8 @@ describe('VerifyEtRequestHistoryDao', () => {
     expect(values).not.toContain(reserveInput.payload);
     expect(JSON.stringify(values)).not.toContain('sanitized-reference');
     expect(transactionOne).not.toHaveBeenCalled();
+    expect(recordSystemWithin).toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ actionType: 'PROVIDER_REQUEST_RESERVED' }));
   });
 
   it('replays an identical reservation without creating another request', async () => {
@@ -126,7 +132,7 @@ describe('VerifyEtRequestHistoryDao', () => {
   });
 
   it('marks reserved, sent or failed records as sent and increments attempts', async () => {
-    one.mockResolvedValue({
+    transactionOne.mockResolvedValue({
       ...requestRow,
       request_status: 'SENT',
       attempt_count: 1,
@@ -138,10 +144,12 @@ describe('VerifyEtRequestHistoryDao', () => {
       attemptCount: 1,
       sentAt: createdAt,
     });
-    expect(one.mock.calls[0][0]).toContain(
+    expect(transactionOne.mock.calls[0][0]).toContain(
       "request_status IN ('RESERVED','SENT','FAILED')",
     );
-    expect(one.mock.calls[0][0]).toContain('completed_at = NULL');
+    expect(transactionOne.mock.calls[0][0]).toContain('completed_at = NULL');
+    expect(recordSystemWithin).toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ actionType: 'PROVIDER_REQUEST_SENT' }));
   });
 
   it('atomically records sanitized response metadata and completes the request', async () => {
@@ -179,6 +187,8 @@ describe('VerifyEtRequestHistoryDao', () => {
       'provider_request_id IS NULL OR $3 IS NULL OR provider_request_id = $3',
     );
     expect(transaction).toHaveBeenCalledTimes(1);
+    expect(recordSystemWithin).toHaveBeenCalledWith(expect.anything(),
+      expect.objectContaining({ actionType: 'PROVIDER_REQUEST_SUCCEEDED' }));
   });
 
   it('rejects an invalid provider HTTP status before database access', () => {

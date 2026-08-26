@@ -1,3 +1,5 @@
+import { sanitizeSensitiveText } from '../common/sensitive-data-sanitizer';
+
 const REDACTED = '[REDACTED]';
 const MAX_DEPTH = 6;
 const MAX_COLLECTION_ITEMS = 50;
@@ -5,8 +7,6 @@ const MAX_STRING_LENGTH = 2_000;
 const MAX_SERIALIZED_LENGTH = 32_000;
 
 const sensitiveKey = /(?:password|passphrase|secret|token|authorization|cookie|api[_-]?key|access[_-]?key|private[_-]?key|account[_-]?number|raw[_-]?(?:payload|document|file)|base64)/iu;
-const bearerValue = /\b(?:bearer|basic)\s+[a-z0-9._~+/=-]+/giu;
-const jwtValue = /\beyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\b/gu;
 
 export function sanitizeAuditMetadata(
   value: Record<string, unknown> | undefined,
@@ -19,10 +19,7 @@ export function sanitizeAuditMetadata(
 
 export function sanitizeAuditText(value: string | undefined): string | null {
   if (!value) return null;
-  return value
-    .replace(bearerValue, REDACTED)
-    .replace(jwtValue, REDACTED)
-    .slice(0, MAX_STRING_LENGTH);
+  return sanitizeSensitiveText(value).slice(0, MAX_STRING_LENGTH);
 }
 
 function sanitizeValue(value: unknown, depth: number): unknown {

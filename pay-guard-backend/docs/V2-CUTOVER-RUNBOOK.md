@@ -31,6 +31,8 @@ routine rollback.
   ingress/WAF rate limiting, and log redaction.
 - [ ] Record the release identifier, operator, approver, maintenance window, and
   rollback decision owner.
+- [x] Guarded local immutable-image deployment/rejection/rollback mechanism passes;
+  production execution and recorded approval remain required.
 
 ## Automated preflight
 
@@ -59,6 +61,21 @@ On 5 August 2026, this command completed successfully with `found 0
 vulnerabilities` after the reviewed Fastify, Swagger, UUID, and OpenTelemetry
 transitive dependency remediations. The post-upgrade lint, build, 69 unit tests,
 and 7 V2 integration tests also passed.
+
+## Release evidence preflight
+
+Copy the redacted example without committing the completed manifest:
+
+```powershell
+Copy-Item docs/production-release-evidence.example.json production-release-evidence.json
+npm run cutover:release-evidence
+```
+
+The completed filename is gitignored. Store the authoritative evidence and approvals
+in the approved deployment/incident systems, and put only HTTPS references and
+non-secret managed-key identifiers in the manifest. A `GO_EVIDENCE_COMPLETE` result
+is required in addition to the database/environment preflight; it does not deploy or
+mutate infrastructure.
 
 ## Backup/restore rehearsal
 

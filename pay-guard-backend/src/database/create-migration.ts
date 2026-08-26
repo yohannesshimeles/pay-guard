@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { describeError } from '../common/safe-error';
 
 function migrationName(): string {
   const separator = process.argv.indexOf('--');
@@ -31,6 +32,6 @@ async function create(): Promise<void> {
 }
 
 void create().catch((error: unknown) => {
-  process.stderr.write(`${error instanceof Error ? error.message : 'Migration creation failed'}\n`);
+  process.stderr.write(`${JSON.stringify(describeError(error))}\n`);
   process.exitCode = 1;
 });

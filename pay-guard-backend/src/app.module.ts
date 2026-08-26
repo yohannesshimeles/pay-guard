@@ -1,6 +1,5 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { AppConfig } from './config/app-config';
-import { CorrelationMiddleware } from './common/correlation.middleware';
 import { ConfigModule } from './config/config.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
@@ -28,6 +27,8 @@ import { FraudModule } from './fraud/fraud.module';
 import { NotificationModule } from './notifications/notification.module';
 import { ReportsModule } from './reports/reports.module';
 import { AuditQueryModule } from './audit/audit-query.module';
+import { ArchiveModule } from './archive/archive.module';
+import { RateLimitModule } from './security/rate-limit.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { AuditQueryModule } from './audit/audit-query.module';
     RedisModule,
     StorageModule,
     ObservabilityModule,
+    RateLimitModule,
     AuditModule,
     AuthModule,
     AuditQueryModule,
@@ -57,17 +59,14 @@ import { AuditQueryModule } from './audit/audit-query.module';
     FraudModule,
     NotificationModule,
     ReportsModule,
+    ArchiveModule,
   ],
 })
-export class AppModule implements NestModule {
+export class AppModule {
   static register(config: AppConfig) {
     return {
       module: AppModule,
       imports: [ConfigModule.register(config)],
     };
-  }
-
-  configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(CorrelationMiddleware).forRoutes('*');
   }
 }

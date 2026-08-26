@@ -111,6 +111,30 @@ Validation:
 - clean V2 database setup applies migrations 001-044;
 - all 26 V2 PostgreSQL integration tests pass.
 
-Remaining Phase 9 Reports completion gate:
+## Increment 4 - production-sized report and export load gate
 
-- production-sized report/export load testing and threshold approval.
+The reproducible `npm run test:phase9:load` harness:
+
+- refuses any database whose name does not end in `_test`;
+- requires the clean V2 integration fixture and runs entirely inside a transaction;
+- generates 250,000 categorized ledger rows and 100,000 verification attempts;
+- verifies the synchronous financial and operational totals exactly against fixture
+  counts before measuring latency;
+- exercises the same production DAOs and CSV serializer used by the export worker;
+- performs one warm-up plus ten measured iterations and evaluates p95;
+- rolls back all generated rows even when a threshold or reconciliation check fails.
+
+Validation result (local PostgreSQL 16 Docker, 2026-08-13):
+
+| Operation | Approved p95 | Measured p95 |
+|---|---:|---:|
+| Financial summary, 250,000 ledger rows | 1,500 ms | 337.62 ms |
+| Operational summary, 100,000 attempts | 2,000 ms | 63.87 ms |
+| Financial export query plus CSV generation | 2,100 ms | 304.77 ms |
+
+Reconciliation returned exactly 250,000 ledger entries and 100,000 verification
+attempts. A post-run database query confirmed zero `PHASE9_LOAD` rows remained.
+
+Phase 9 Reports implementation and validation gates are complete. Production
+deployment monitoring should retain these thresholds as regression alerts rather
+than treating one workstation result as a capacity forecast.

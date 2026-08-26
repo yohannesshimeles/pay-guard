@@ -242,6 +242,7 @@ export class SubscriptionVerificationDao {
 
   private request(row: MatchRow) {
     return {
+      bankId: row.verifyet_bank_identifier,
       bankCode: row.verifyet_bank_identifier,
       transactionReference: row.parsed_reference!, amount: row.price_snapshot,
       receiverAccountSuffix: row.normalized_account_suffix!,

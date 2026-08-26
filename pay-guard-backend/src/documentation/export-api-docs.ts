@@ -9,7 +9,12 @@ import { AppModule } from '../app.module';
 import { configureApplication } from '../bootstrap';
 import { loadConfig } from '../config/app-config';
 import { createApiDocument } from './api-documentation';
-import { createPostmanCollection } from './postman-collection';
+import {
+  createPostmanCollection,
+  createPostmanEnvironment,
+} from './postman-collection';
+import { describeError } from '../common/safe-error';
+import { resolvePublicError } from '../common/error-contract';
 
 async function main(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -20,6 +25,7 @@ async function main(): Promise<void> {
   configureApplication(app, { exposeDocumentation: false });
 
   const document = createApiDocument(app);
+  const collection = createPostmanCollection(document);
   const outputs = [
     {
       file: resolve('docs/api/openapi.json'),
@@ -27,7 +33,11 @@ async function main(): Promise<void> {
     },
     {
       file: resolve('postman/PayGuard.postman_collection.json'),
-      value: createPostmanCollection(document),
+      value: collection,
+    },
+    {
+      file: resolve('postman/PayGuard-Local.postman_environment.json'),
+      value: createPostmanEnvironment(collection),
     },
   ];
   const check = process.argv.includes('--check');
@@ -55,6 +65,9 @@ async function main(): Promise<void> {
 }
 
 void main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error(JSON.stringify({
+    ...describeError(error),
+    error: resolvePublicError(error, 500, undefined),
+  }));
   process.exitCode = 1;
 });

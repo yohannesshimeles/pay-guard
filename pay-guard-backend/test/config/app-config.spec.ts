@@ -25,6 +25,14 @@ describe('loadConfig', () => {
 
     expect(config.port).toBe(4100);
     expect(config.environment).toBe('test');
+    expect(config.trustProxyHops).toBe(0);
+    expect(config.rateLimit).toEqual({
+      enabled: true,
+      windowMs: 60_000,
+      globalMax: 300,
+      authMax: 10,
+      uploadMax: 20,
+    });
     expect(config.databaseSchemaVersion).toBe('legacy');
     expect(config.databasePool).toEqual({
       max: 20,
@@ -46,6 +54,9 @@ describe('loadConfig', () => {
       enabled: false,
       baseUrl: undefined,
       apiKey: undefined,
+      webhookUrl: undefined,
+      webhookSecret: undefined,
+      waitMs: 5_000,
       timeoutMs: 8_000,
       maxResponseBytes: 65_536,
       maxPollAttempts: 6,
@@ -58,6 +69,8 @@ describe('loadConfig', () => {
     });
     expect(config.s3.forcePathStyle).toBe(true);
     expect(config.jwtAccessTtlSeconds).toBe(600);
+    expect(config.archiveEncryptionKeyId).toBe('primary');
+    expect(config.archivePreviousEncryptionKeys).toEqual({});
   });
 
   it('requires a complete Firebase service account only when enabled', () => {
@@ -74,6 +87,56 @@ describe('loadConfig', () => {
         ACCOUNT_ENCRYPTION_KEY: validEnvironment.JWT_ACCESS_SECRET,
       }),
     ).toThrow('ACCOUNT_ENCRYPTION_KEY');
+  });
+
+  it('requires a separately managed archive encryption key in production', () => {
+    expect(() => loadConfig({
+      ...validEnvironment,
+      NODE_ENV: 'production',
+      ACCOUNT_ENCRYPTION_KEY:
+        'account-encryption-key-that-is-at-least-32-characters',
+      ARCHIVE_ENCRYPTION_KEY: validEnvironment.JWT_ACCESS_SECRET,
+    })).toThrow('ARCHIVE_ENCRYPTION_KEY');
+  });
+
+  it('validates and maps the archive rotation keyring', () => {
+    const config = loadConfig({ ...validEnvironment,
+      ARCHIVE_ENCRYPTION_KEY_ID: '2026-q2',
+      ARCHIVE_ENCRYPTION_KEY: 'new-archive-key-that-is-at-least-32-characters',
+      ARCHIVE_PREVIOUS_ENCRYPTION_KEYS: JSON.stringify({
+        '2026-q1': 'old-archive-key-that-is-at-least-32-characters',
+      }) });
+    expect(config.archiveEncryptionKeyId).toBe('2026-q2');
+    expect(config.archivePreviousEncryptionKeys).toHaveProperty('2026-q1');
+    expect(() => loadConfig({ ...validEnvironment,
+      ARCHIVE_PREVIOUS_ENCRYPTION_KEYS: '{bad json' }))
+      .toThrow('ARCHIVE_PREVIOUS_ENCRYPTION_KEYS');
+  });
+
+  it('rejects disabled production rate limiting and invalid proxy hops', () => {
+    const productionSecrets = {
+      ACCOUNT_ENCRYPTION_KEY:
+        'account-encryption-key-that-is-at-least-32-characters',
+      ARCHIVE_ENCRYPTION_KEY:
+        'archive-encryption-key-that-is-at-least-32-characters',
+      TRUST_PROXY_HOPS: '1',
+    };
+    expect(() => loadConfig({
+      ...validEnvironment,
+      ...productionSecrets,
+      NODE_ENV: 'production',
+      RATE_LIMIT_ENABLED: 'false',
+    })).toThrow('RATE_LIMIT_ENABLED');
+    expect(() => loadConfig({
+      ...validEnvironment,
+      TRUST_PROXY_HOPS: '6',
+    })).toThrow('TRUST_PROXY_HOPS');
+    expect(() => loadConfig({
+      ...validEnvironment,
+      ...productionSecrets,
+      NODE_ENV: 'production',
+      TRUST_PROXY_HOPS: undefined,
+    })).toThrow('TRUST_PROXY_HOPS');
   });
 
   it('rejects short secrets without disclosing values', () => {

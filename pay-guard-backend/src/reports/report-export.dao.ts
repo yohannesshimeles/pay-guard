@@ -159,23 +159,41 @@ export class ReportExportDao {
          WHERE id = $1 AND claim_token = $2`,
         [claim.jobId, claim.claimToken],
       );
+      await this.audit.recordSystemWithin(transaction, {
+        actionType: 'REPORT_EXPORT_READY', recordType: 'REPORT_GENERATION_JOB',
+        recordId: claim.jobId, businessId: claim.businessId,
+        branchId: claim.branchId, newValue: {
+          reportType: claim.reportType, sizeBytes: file.sizeBytes,
+          sha256: file.sha256,
+        },
+      });
     });
   }
 
   fail(claim: ReportExportClaim, errorCode: string) {
     const final = claim.attemptNo >= 3;
-    return this.dao.execute(
-      `UPDATE report_generation_jobs
-       SET status = $3, failure_reason = $4, claim_token = NULL,
-           claimed_at = NULL,
-           next_attempt_at = CASE WHEN $3 = 'QUEUED'
-             THEN now() + interval '1 minute' * $5 ELSE NULL END,
-           completed_at = CASE WHEN $3 = 'FAILED' THEN now() ELSE NULL END,
-           updated_at = now()
-       WHERE id = $1 AND claim_token = $2`,
-      [claim.jobId, claim.claimToken, final ? 'FAILED' : 'QUEUED',
-       errorCode, claim.attemptNo],
-    );
+    return this.dao.transaction(async (transaction) => {
+      const changed = await transaction.execute(
+        `UPDATE report_generation_jobs
+         SET status = $3, failure_reason = $4, claim_token = NULL,
+             claimed_at = NULL,
+             next_attempt_at = CASE WHEN $3 = 'QUEUED'
+               THEN now() + interval '1 minute' * $5 ELSE NULL END,
+             completed_at = CASE WHEN $3 = 'FAILED' THEN now() ELSE NULL END,
+             updated_at = now()
+         WHERE id = $1 AND claim_token = $2`,
+        [claim.jobId, claim.claimToken, final ? 'FAILED' : 'QUEUED',
+         errorCode, claim.attemptNo],
+      );
+      if (changed) await this.audit.recordSystemWithin(transaction, {
+        actionType: final ? 'REPORT_EXPORT_FAILED' : 'REPORT_EXPORT_RETRY_SCHEDULED',
+        recordType: 'REPORT_GENERATION_JOB', recordId: claim.jobId,
+        businessId: claim.businessId, branchId: claim.branchId,
+        result: 'FAILURE', failureReason: errorCode,
+        newValue: { attemptNo: claim.attemptNo, final },
+      });
+      return changed;
+    });
   }
 
   async findDownloadOwned(jobId: string, businessId: string, userId: string) {
@@ -225,10 +243,15 @@ export class ReportExportDao {
     return this.dao.transaction(async (transaction) => {
       const file = await transaction.optional<{
         id: string; job_id: string; storage_object_key: string;
+        business_id: string; branch_id: string | null;
       }>(
-        `SELECT id, job_id, storage_object_key FROM report_files
-         WHERE deleted_at IS NULL AND available_until <= now()
-         ORDER BY available_until, id FOR UPDATE SKIP LOCKED LIMIT 1`,
+        `SELECT file.id, file.job_id, file.storage_object_key,
+                job.business_id, job.branch_id
+         FROM report_files file
+         JOIN report_generation_jobs job ON job.id = file.job_id
+         WHERE file.deleted_at IS NULL AND file.available_until <= now()
+         ORDER BY file.available_until, file.id
+         FOR UPDATE OF file SKIP LOCKED LIMIT 1`,
       );
       if (!file) return undefined;
       await transaction.execute(
@@ -238,6 +261,12 @@ export class ReportExportDao {
         `UPDATE report_generation_jobs SET status = 'EXPIRED', updated_at = now()
          WHERE id = $1 AND status = 'READY'`, [file.job_id],
       );
+      await this.audit.recordSystemWithin(transaction, {
+        actionType: 'REPORT_EXPORT_EXPIRED', recordType: 'REPORT_GENERATION_JOB',
+        recordId: file.job_id, businessId: file.business_id,
+        branchId: file.branch_id ?? undefined,
+        newValue: { reportFileId: file.id },
+      });
       return { objectKey: file.storage_object_key };
     });
   }

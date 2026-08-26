@@ -44,6 +44,7 @@ import {
 } from '../../src/fraud/recovery-authorization.dao';
 import { TransactionReceiptDao } from '../../src/qr-processing/transaction-receipt.dao';
 import { ProofMimeType } from '../../src/qr-processing/enums/proof-mime-type.enum';
+import { VerifyEtWebhookDeliveryDao } from '../../src/verify-et/verify-et-webhook-delivery.dao';
 
 const databaseUrl = process.env.TEST_V2_DATABASE_URL;
 const describeWithDatabase = databaseUrl ? describe : describe.skip;
@@ -54,6 +55,10 @@ const config: AppConfig = {
   environment: 'test',
   port: 0,
   logLevel: 'error',
+  rateLimit: {
+    enabled: false, windowMs: 60_000,
+    globalMax: 300, authMax: 10, uploadMax: 20,
+  },
   databaseSchemaVersion: 'v2',
   databaseUrl: databaseUrl!,
   databasePool: DEFAULT_DATABASE_POOL_CONFIG,
@@ -95,6 +100,7 @@ describeWithDatabase('V2 authentication persistence', () => {
   let verificationOutcomes: VerificationOutcomeService;
   let verifiedPaymentPosting: VerifiedPaymentPostingService;
   let pendingRechecks: PendingRecheckDao;
+  let webhookDeliveries: VerifyEtWebhookDeliveryDao;
   let pendingRecheckCoordinator: PendingRecheckCoordinatorService;
   let transactionQueries: TransactionQueryService;
   let ledgerPostings: LedgerPostingService;
@@ -172,6 +178,8 @@ describeWithDatabase('V2 authentication persistence', () => {
       '043_v2_operational_report_indexes.sql',
       '044_v2_report_export_lifecycle.sql',
       '045_v2_audit_query_foundation.sql',
+      '046_v2_receipt_archive_lifecycle.sql',
+      '047_v2_waiter_session_serialization.sql',
     ]) {
       await pool.query(
         await readFile(
@@ -287,6 +295,7 @@ describeWithDatabase('V2 authentication persistence', () => {
     verificationOutcomes = app.get(VerificationOutcomeService);
     verifiedPaymentPosting = app.get(VerifiedPaymentPostingService);
     pendingRechecks = app.get(PendingRecheckDao);
+    webhookDeliveries = app.get(VerifyEtWebhookDeliveryDao);
     pendingRecheckCoordinator = app.get(PendingRecheckCoordinatorService);
     transactionQueries = app.get(TransactionQueryService);
     ledgerPostings = app.get(LedgerPostingService);
@@ -366,7 +375,7 @@ describeWithDatabase('V2 authentication persistence', () => {
     });
   });
 
-  it('enforces one active Waiter session at the database boundary', async () => {
+  it('atomically replaces the active Waiter device session', async () => {
     const waiterRole = await pool.query<{ id: string }>(
       `INSERT INTO membership_role_assignments (
          membership_id, role_code, status, approved_at, assigned_at
@@ -387,17 +396,120 @@ describeWithDatabase('V2 authentication persistence', () => {
       workAssignmentId: waiterAssignment.rows[0].id,
       expiresAt: new Date(Date.now() + 60_000),
     };
-    await sessions.createBusinessSession({
+    const first = await sessions.createBusinessSession({
       ...input,
       refreshTokenHash: 'c'.repeat(64),
+      deviceIdentifierHash: '1'.repeat(64),
+      devicePlatform: 'android',
     });
 
-    await expect(
-      sessions.createBusinessSession({
-        ...input,
-        refreshTokenHash: 'e'.repeat(64),
-      }),
-    ).rejects.toMatchObject({ code: '23505' });
+    const second = await sessions.createBusinessSession({
+      ...input,
+      refreshTokenHash: 'e'.repeat(64),
+      deviceIdentifierHash: '2'.repeat(64),
+      devicePlatform: 'ios',
+    });
+    expect(second.replacedSessionIds).toEqual([first.sessionId]);
+    await expect(sessions.findActiveByRefreshTokenHash('c'.repeat(64)))
+      .resolves.toBeUndefined();
+    await expect(sessions.isActive({
+      sessionKind: 'BUSINESS_USER', sessionId: first.sessionId,
+      subjectId: userId,
+    })).resolves.toBe(false);
+    await expect(sessions.findActiveByRefreshTokenHash('e'.repeat(64)))
+      .resolves.toMatchObject({ id: second.sessionId, role: 'WAITER' });
+    const replaced = await pool.query<{ revoked_reason: string }>(
+      `SELECT revoked_reason FROM user_sessions WHERE id = $1`,
+      [first.sessionId],
+    );
+    expect(replaced.rows[0].revoked_reason)
+      .toBe('Replaced by a new Waiter device session');
+    await sessions.revoke({
+      sessionKind: 'BUSINESS_USER', sessionId: second.sessionId,
+      subjectId: userId, reason: 'Integration test cleanup',
+    });
+
+    const directInsert = (hash: string) => pool.query(
+      `INSERT INTO user_sessions (
+         user_id, membership_id, membership_role_id, work_assignment_id,
+         refresh_token_hash, expires_at, device_platform
+       ) VALUES ($1,$2,$3,$4,$5,now() + interval '1 hour','web')`,
+      [userId, membershipId, waiterRole.rows[0].id,
+       waiterAssignment.rows[0].id, hash],
+    );
+    const concurrent = await Promise.allSettled([
+      directInsert('7'.repeat(64)), directInsert('8'.repeat(64)),
+    ]);
+    expect(concurrent.filter((result) => result.status === 'fulfilled'))
+      .toHaveLength(1);
+    const rejected = concurrent.find((result) => result.status === 'rejected');
+    expect(rejected).toMatchObject({ reason: { code: '23505' } });
+    await pool.query(
+      `UPDATE user_sessions
+       SET session_status = 'REVOKED', revoked_at = now(),
+           revoked_reason = 'Concurrent integration cleanup'
+       WHERE user_id = $1 AND session_status = 'ACTIVE'`,
+      [userId],
+    );
+
+    const server = app.getHttpAdapter().getInstance();
+    const loginPayload = {
+      identity: 'v2-manager@example.test',
+      password: 'V2-Manager-Integration-Password!',
+      context: {
+        membershipId, membershipRoleId: waiterRole.rows[0].id,
+        workAssignmentId: waiterAssignment.rows[0].id,
+      },
+    };
+    const firstLogin = await server.inject({
+      method: 'POST', url: '/api/v1/auth/login',
+      payload: {
+        ...loginPayload, deviceIdentifier: 'waiter-device-one',
+        devicePlatform: 'android',
+      },
+    });
+    expect(firstLogin.statusCode).toBe(201);
+    const firstTokens = responseData<{
+      accessToken: string; refreshToken: string;
+    }>(firstLogin);
+    const secondLogin = await server.inject({
+      method: 'POST', url: '/api/v1/auth/login',
+      payload: {
+        ...loginPayload, deviceIdentifier: 'waiter-device-two',
+        devicePlatform: 'ios',
+      },
+    });
+    expect(secondLogin.statusCode).toBe(201);
+    const secondTokens = responseData<{
+      accessToken: string; refreshToken: string;
+    }>(secondLogin);
+
+    const replacedAccess = await server.inject({
+      method: 'GET', url: '/api/v1/auth/me',
+      headers: { authorization: `Bearer ${firstTokens.accessToken}` },
+    });
+    expect(replacedAccess.statusCode).toBe(401);
+    const replacedRefresh = await server.inject({
+      method: 'POST', url: '/api/v1/auth/refresh',
+      payload: { refreshToken: firstTokens.refreshToken },
+    });
+    expect(replacedRefresh.statusCode).toBe(401);
+    const activeAccess = await server.inject({
+      method: 'GET', url: '/api/v1/auth/me',
+      headers: { authorization: `Bearer ${secondTokens.accessToken}` },
+    });
+    expect(activeAccess.statusCode).toBe(200);
+    const replacementAudit = await pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count FROM audit_logs
+       WHERE user_id = $1 AND action_type = 'AUTH_DEVICE_REPLACED'`,
+      [userId],
+    );
+    expect(replacementAudit.rows[0].count).toBe('1');
+    const cleanup = await server.inject({
+      method: 'POST', url: '/api/v1/auth/logout',
+      payload: { refreshToken: secondTokens.refreshToken },
+    });
+    expect(cleanup.statusCode).toBe(201);
   });
 
   it('creates and revokes an isolated Platform Super Admin session', async () => {
@@ -3456,6 +3568,66 @@ describeWithDatabase('V2 authentication persistence', () => {
     expect(responseData<{ status: string; attemptCount: number }>(status))
       .toMatchObject({ status: 'READY', attemptCount: 1 });
   });
+
+  it('survives pending-queue and webhook bursts with lease and replay isolation', async () => {
+    const transactions = await pool.query<{ id: string }>(
+      `INSERT INTO customer_transactions (
+         business_id, branch_id, work_assignment_id, submitted_by_user_id,
+         settlement_account_id, bank_id, transaction_reference, amount,
+         transaction_date, transaction_time, submission_method, current_status
+       )
+       SELECT source.business_id, source.branch_id, source.work_assignment_id,
+              source.submitted_by_user_id, source.settlement_account_id,
+              source.bank_id,
+              'PHASE9-BURST-' || series.value::text,
+              source.amount, source.transaction_date, source.transaction_time,
+              source.submission_method, 'PENDING'
+       FROM customer_transactions source
+       CROSS JOIN generate_series(1, 40) AS series(value)
+       WHERE source.transaction_reference = 'VERIFY-TRANSITION-001'
+       RETURNING id`,
+    );
+    expect(transactions.rows).toHaveLength(40);
+    const transactionIds = transactions.rows.map((row) => row.id);
+    await pool.query(
+      `INSERT INTO pending_rechecks (transaction_id, recheck_number, scheduled_at)
+       SELECT unnest($1::uuid[]), 1, '2000-01-01T00:00:00.000Z'::timestamptz`,
+      [transactionIds],
+    );
+
+    const claims = await Promise.all(
+      Array.from({ length: 40 }, (_, index) =>
+        pendingRechecks.claimNext(`phase9-burst-worker-${index}`, 60)),
+    );
+    const claimedIds = claims.map((claim) => claim?.transactionId);
+    expect(claimedIds.every((id) => id && transactionIds.includes(id))).toBe(true);
+    expect(new Set(claimedIds).size).toBe(40);
+
+    const uniqueDeliveries = await Promise.all(
+      Array.from({ length: 50 }, (_, index) =>
+        webhookDeliveries.reserveVerified({
+          deliveryId: `phase9-burst-delivery-${index.toString().padStart(3, '0')}`,
+          eventType: 'verification.completed',
+          rawBody: Buffer.from(JSON.stringify({ index })),
+          maxPayloadBytes: 65_536,
+        })),
+    );
+    expect(uniqueDeliveries.every((result) => !result.duplicate)).toBe(true);
+
+    const replayInput = {
+      deliveryId: 'phase9-burst-replay-shared',
+      eventType: 'verification.completed',
+      rawBody: Buffer.from('{"status":"verified"}'),
+      maxPayloadBytes: 65_536,
+    };
+    const replays = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        webhookDeliveries.reserveVerified(replayInput)),
+    );
+    expect(replays.filter((result) => !result.duplicate)).toHaveLength(1);
+    expect(replays.filter((result) => result.duplicate)).toHaveLength(19);
+    expect(new Set(replays.map((result) => result.delivery.id)).size).toBe(1);
+  }, 30_000);
 
   it('queries immutable audit records within business, branch and platform scope', async () => {
     const auditId = deterministicUuid('phase9:audit-query');

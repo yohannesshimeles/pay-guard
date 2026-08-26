@@ -1,0 +1,109 @@
+{
+  "release": {
+    "id": "TBD",
+    "environment": "staging",
+    "imageDigest": "TBD",
+    "windowStart": "TBD",
+    "windowEnd": "TBD"
+  },
+  "people": {
+    "operator": "TBD",
+    "approver": "TBD",
+    "rollbackDecisionOwner": "TBD"
+  },
+  "ci": { "status": "PENDING", "runEvidence": "TBD", "commitSha": "TBD" },
+  "repositorySecurity": {
+    "dependencyGraph": { "status": "PENDING", "evidence": "TBD" },
+    "dependabotAlerts": { "status": "PENDING", "evidence": "TBD" },
+    "dependabotSecurityUpdates": {
+      "status": "PENDING",
+      "evidence": "TBD"
+    },
+    "branchProtection": {
+      "status": "PENDING",
+      "evidence": "TBD",
+      "requiredChecks": ["dependency-review", "validate", "container"],
+      "requiredApprovingReviews": 0,
+      "dismissStaleApprovals": false,
+      "requireConversationResolution": false,
+      "blockForcePushes": false,
+      "blockDeletions": false
+    }
+  },
+  "infrastructure": {
+    "tls": { "status": "PENDING", "evidence": "TBD" },
+    "waf": {
+      "status": "PENDING",
+      "evidence": "TBD",
+      "approvedAuthPolicy": "TBD"
+    },
+    "secretManager": { "status": "PENDING", "evidence": "TBD" }
+  },
+  "verifyEt": {
+    "status": "PENDING",
+    "keyReference": "TBD",
+    "webhookSpecificationVersion": "TBD",
+    "callbackUrl": "TBD",
+    "drillEvidence": "TBD"
+  },
+  "bankApprovals": {
+    "status": "PENDING",
+    "approvedReceivingAccounts": 0,
+    "approvedQrSamples": 0,
+    "evidence": "TBD"
+  },
+  "drills": {
+    "backupRestore": {
+      "status": "PENDING",
+      "evidence": "TBD",
+      "exercisedAt": "TBD"
+    },
+    "archiveKeyRotation": {
+      "status": "PENDING",
+      "evidence": "TBD",
+      "exercisedAt": "TBD"
+    },
+    "providerOutage": {
+      "status": "PENDING",
+      "evidence": "TBD",
+      "exercisedAt": "TBD"
+    },
+    "queueReplay": {
+      "status": "PENDING",
+      "evidence": "TBD",
+      "exercisedAt": "TBD"
+    },
+    "deploymentRollback": {
+      "status": "PENDING",
+      "evidence": "TBD",
+      "exercisedAt": "TBD"
+    }
+  },
+  "alertOwners": {
+    "backend": {
+      "primary": "TBD",
+      "secondary": "TBD",
+      "acknowledgementEvidence": "TBD"
+    },
+    "payments": {
+      "primary": "TBD",
+      "secondary": "TBD",
+      "acknowledgementEvidence": "TBD"
+    },
+    "security": {
+      "primary": "TBD",
+      "secondary": "TBD",
+      "acknowledgementEvidence": "TBD"
+    },
+    "platform": {
+      "primary": "TBD",
+      "secondary": "TBD",
+      "acknowledgementEvidence": "TBD"
+    },
+    "productOperations": {
+      "primary": "TBD",
+      "secondary": "TBD",
+      "acknowledgementEvidence": "TBD"
+    }
+  }
+}

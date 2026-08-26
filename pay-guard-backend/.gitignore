@@ -5,5 +5,7 @@ coverage/
 *.log
 backups/
 audit-production.json
+production-release-evidence.json
+phase10-container-scan.sarif
 tmp/
 .npm-cache/

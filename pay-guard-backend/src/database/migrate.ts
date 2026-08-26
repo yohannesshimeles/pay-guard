@@ -3,6 +3,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { Pool, PoolClient } from 'pg';
 import { loadConfig } from '../config/app-config';
+import { describeError } from '../common/safe-error';
 
 type Command = 'up' | 'down' | 'status';
 
@@ -225,7 +226,6 @@ async function migrate(): Promise<void> {
 }
 
 void migrate().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : 'Unknown migration error';
-  process.stderr.write(`Migration failed: ${message}\n`);
+  process.stderr.write(`Migration failed: ${JSON.stringify(describeError(error))}\n`);
   process.exitCode = 1;
 });

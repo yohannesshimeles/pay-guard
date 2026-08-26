@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CentralDao } from '../database/central.dao';
+import { V2AuditService } from '../audit/v2-audit.service';
 import { hashVerifyEtBytes } from './verify-et-payload-hash';
 
 export type VerifyEtWebhookDeliveryStatus =
@@ -45,7 +46,10 @@ export class VerifyEtWebhookDeliveryConflictError extends Error {
 
 @Injectable()
 export class VerifyEtWebhookDeliveryDao {
-  constructor(private readonly dao: CentralDao) {}
+  constructor(
+    private readonly dao: CentralDao,
+    private readonly audit: V2AuditService,
+  ) {}
 
   reserveVerified(input: {
     deliveryId: string;
@@ -67,6 +71,12 @@ export class VerifyEtWebhookDeliveryDao {
         [input.deliveryId, input.eventType, payloadHash],
       );
       if (inserted) {
+        await this.audit.recordSystemWithin(transaction, {
+          actionType: 'PROVIDER_WEBHOOK_RECEIVED',
+          recordType: 'VERIFYET_WEBHOOK_DELIVERY', recordId: inserted.id,
+          newValue: { eventType: inserted.event_type,
+            payloadHash: inserted.payload_hash },
+        });
         return { delivery: this.map(inserted), duplicate: false };
       }
 
@@ -89,19 +99,27 @@ export class VerifyEtWebhookDeliveryDao {
   async claim(
     deliveryRecordId: string,
   ): Promise<VerifyEtWebhookDelivery | undefined> {
-    const row = await this.dao.optional<DeliveryRow>(
-      `UPDATE verifyet_webhook_deliveries
-       SET delivery_status = 'PROCESSING',
-           processing_attempts = processing_attempts + 1,
-           processing_started_at = now(),
-           last_error_code = NULL,
-           updated_at = now()
-       WHERE id = $1
-         AND delivery_status IN ('RECEIVED','FAILED')
-       RETURNING *`,
-      [deliveryRecordId],
-    );
-    return row ? this.map(row) : undefined;
+    return this.dao.transaction(async (transaction) => {
+      const row = await transaction.optional<DeliveryRow>(
+        `UPDATE verifyet_webhook_deliveries
+         SET delivery_status = 'PROCESSING',
+             processing_attempts = processing_attempts + 1,
+             processing_started_at = now(),
+             last_error_code = NULL,
+             updated_at = now()
+         WHERE id = $1
+           AND delivery_status IN ('RECEIVED','FAILED')
+         RETURNING *`, [deliveryRecordId],
+      );
+      if (!row) return undefined;
+      await this.audit.recordSystemWithin(transaction, {
+        actionType: 'PROVIDER_WEBHOOK_PROCESSING',
+        recordType: 'VERIFYET_WEBHOOK_DELIVERY', recordId: row.id,
+        newValue: { eventType: row.event_type,
+          processingAttempts: row.processing_attempts },
+      });
+      return this.map(row);
+    });
   }
 
   async finish(
@@ -118,22 +136,29 @@ export class VerifyEtWebhookDeliveryDao {
       throw new Error('Verify.ET webhook error code is invalid');
     }
 
-    const row = await this.dao.one<DeliveryRow>(
-      `UPDATE verifyet_webhook_deliveries
-       SET delivery_status = $2,
-           last_error_code = $3,
-           processed_at = CASE WHEN $2 = 'PROCESSED' THEN now() ELSE NULL END,
-           updated_at = now()
-       WHERE id = $1
-         AND delivery_status = 'PROCESSING'
-       RETURNING *`,
-      [
-        deliveryRecordId,
-        result.succeeded ? 'PROCESSED' : 'FAILED',
-        result.errorCode ?? null,
-      ],
-    );
-    return this.map(row);
+    return this.dao.transaction(async (transaction) => {
+      const row = await transaction.one<DeliveryRow>(
+        `UPDATE verifyet_webhook_deliveries
+         SET delivery_status = $2,
+             last_error_code = $3,
+             processed_at = CASE WHEN $2 = 'PROCESSED' THEN now() ELSE NULL END,
+             updated_at = now()
+         WHERE id = $1 AND delivery_status = 'PROCESSING'
+         RETURNING *`,
+        [deliveryRecordId, result.succeeded ? 'PROCESSED' : 'FAILED',
+         result.errorCode ?? null],
+      );
+      await this.audit.recordSystemWithin(transaction, {
+        actionType: result.succeeded
+          ? 'PROVIDER_WEBHOOK_PROCESSED' : 'PROVIDER_WEBHOOK_FAILED',
+        recordType: 'VERIFYET_WEBHOOK_DELIVERY', recordId: row.id,
+        result: result.succeeded ? 'SUCCESS' : 'FAILURE',
+        failureReason: result.errorCode,
+        newValue: { eventType: row.event_type,
+          processingAttempts: row.processing_attempts },
+      });
+      return this.map(row);
+    });
   }
 
   private validateDeliveryId(value: string): void {

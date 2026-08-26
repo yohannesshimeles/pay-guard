@@ -2,7 +2,9 @@ import {
   Inject, Injectable, Logger, OnApplicationBootstrap, OnApplicationShutdown,
 } from '@nestjs/common';
 import { APP_CONFIG, AppConfig } from '../config/app-config';
+import { resolvePublicError } from '../common/error-contract';
 import { NotificationDeliveryService } from './notification-delivery.service';
+import { MetricsService } from '../observability/metrics.service';
 
 @Injectable()
 export class NotificationWorkerRunner implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -13,6 +15,7 @@ export class NotificationWorkerRunner implements OnApplicationBootstrap, OnAppli
 
   constructor(
     private readonly delivery: NotificationDeliveryService,
+    private readonly metrics: MetricsService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
@@ -39,10 +42,15 @@ export class NotificationWorkerRunner implements OnApplicationBootstrap, OnAppli
     try {
       for (let count = 0; count < 25; count += 1) {
         const result = await this.delivery.processNext();
+        this.metrics.workerResults.inc({ worker: 'notification', outcome: result.status });
         if (result.status === 'IDLE') break;
       }
-    } catch {
-      this.logger.error(JSON.stringify({ event: 'notification.worker_tick_failed' }));
+    } catch (error) {
+      this.metrics.workerTickFailures.inc({ worker: 'notification' });
+      this.logger.error(JSON.stringify({
+        event: 'notification.worker_tick_failed',
+        error: resolvePublicError(error, 500, undefined),
+      }));
     } finally {
       this.active = false;
       if (!this.stopped) this.schedule(this.config.notificationWorkerPollMs);

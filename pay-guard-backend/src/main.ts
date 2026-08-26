@@ -11,12 +11,20 @@ import { AppModule } from './app.module';
 import { configureApplication } from './bootstrap';
 import { loadConfig } from './config/app-config';
 import { DEFAULT_MAX_PROOF_BYTES } from './qr-processing/proof-file.validator';
+import { resolvePublicError } from './common/error-contract';
+import { nestLogLevels } from './common/nest-log-levels';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule.register(config),
-    new FastifyAdapter({ trustProxy: true }),
+    new FastifyAdapter({
+      trustProxy: config.trustProxyHops ? config.trustProxyHops : false,
+    }),
+    {
+      logger: nestLogLevels(config.logLevel),
+      rawBody: true,
+    },
   );
   await app.register(helmet);
   await app.register(multipart, {
@@ -47,9 +55,11 @@ async function bootstrap(): Promise<void> {
 }
 
 void bootstrap().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : 'Unknown startup error';
   Logger.error(
-    JSON.stringify({ event: 'application.start_failed', message }),
+    JSON.stringify({
+      event: 'application.start_failed',
+      error: resolvePublicError(error, 500, undefined),
+    }),
     'Bootstrap',
   );
   process.exitCode = 1;

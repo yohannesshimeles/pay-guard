@@ -54,6 +54,20 @@ export type PostmanCollection = {
   item: Array<{ name: string; item: PostmanItem[] }>;
 };
 
+export type PostmanEnvironment = {
+  id: string;
+  name: string;
+  values: Array<{
+    key: string;
+    value: string;
+    enabled: boolean;
+    type?: 'default' | 'secret';
+  }>;
+  _postman_variable_scope: 'environment';
+  _postman_exported_at: string;
+  _postman_exported_using: string;
+};
+
 const HTTP_METHODS = [
   'get',
   'post',
@@ -156,9 +170,24 @@ function requestBody(
 
   const json = content['application/json'];
   if (!json) return undefined;
+  const example = exampleForSchema(json.schema, document);
+  if (example && typeof example === 'object' && !Array.isArray(example)) {
+    const record = example as Record<string, unknown>;
+    if (operation.operationId === 'Auth_login') {
+      record.identity = '{{identity}}';
+      record.password = '{{password}}';
+      record.deviceIdentifier = 'postman-{{$guid}}';
+    }
+    if (
+      operation.operationId === 'Auth_refresh' ||
+      operation.operationId === 'Auth_logout'
+    ) {
+      record.refreshToken = '{{refreshToken}}';
+    }
+  }
   return {
     mode: 'raw',
-    raw: JSON.stringify(exampleForSchema(json.schema, document), null, 2),
+    raw: JSON.stringify(example, null, 2),
     options: { raw: { language: 'json' } },
   };
 }
@@ -207,7 +236,7 @@ function buildRequest(
     method: method.toUpperCase(),
     header: headers,
     body,
-    auth: operation.security?.length === 0 ? { type: 'noauth' } : undefined,
+    auth: !operation.security?.length ? { type: 'noauth' } : undefined,
     url: {
       raw: `{{baseUrl}}${urlPath}`,
       host: ['{{baseUrl}}'],
@@ -216,6 +245,30 @@ function buildRequest(
     },
     description: operation.description ?? operation.summary,
   };
+}
+
+function testScript(operation: Operation): string[] {
+  const scripts = [
+    "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+  ];
+  if (
+    operation.operationId === 'Auth_login' ||
+    operation.operationId === 'Auth_refresh'
+  ) {
+    scripts.push(
+      'const payload = pm.response.json();',
+      'const tokens = payload.data || payload;',
+      "if (tokens.accessToken) pm.collectionVariables.set('accessToken', tokens.accessToken);",
+      "if (tokens.refreshToken) pm.collectionVariables.set('refreshToken', tokens.refreshToken);",
+    );
+  }
+  if (operation.operationId === 'Auth_logout') {
+    scripts.push(
+      "pm.collectionVariables.unset('accessToken');",
+      "pm.collectionVariables.unset('refreshToken');",
+    );
+  }
+  return scripts;
 }
 
 export function createPostmanCollection(
@@ -241,9 +294,7 @@ export function createPostmanCollection(
             listen: 'test',
             script: {
               type: 'text/javascript',
-              exec: [
-                "pm.test('Successful response', () => pm.expect(pm.response.code).to.be.within(200, 299));",
-              ],
+              exec: testScript(operation),
             },
           },
         ],
@@ -269,6 +320,9 @@ export function createPostmanCollection(
     variable: [
       { key: 'baseUrl', value: 'http://localhost:4000', type: 'string' },
       { key: 'accessToken', value: '', type: 'string' },
+      { key: 'refreshToken', value: '', type: 'string' },
+      { key: 'identity', value: '', type: 'string' },
+      { key: 'password', value: '', type: 'string' },
       ...[...pathVariables]
         .sort()
         .map((key) => ({ key, value: `replace-${key}`, type: 'string' })),
@@ -276,5 +330,24 @@ export function createPostmanCollection(
     item: [...folders.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([name, item]) => ({ name, item })),
+  };
+}
+
+export function createPostmanEnvironment(
+  collection: PostmanCollection,
+): PostmanEnvironment {
+  const secretKeys = new Set(['accessToken', 'refreshToken', 'password']);
+  return {
+    id: 'd2783438-7f14-4f44-9f99-1e275e44aa91',
+    name: 'PayGuard Local',
+    values: collection.variable.map(({ key, value }) => ({
+      key,
+      value: key === 'baseUrl' ? value : '',
+      enabled: true,
+      type: secretKeys.has(key) ? 'secret' : 'default',
+    })),
+    _postman_variable_scope: 'environment',
+    _postman_exported_at: '2026-08-14T00:00:00.000Z',
+    _postman_exported_using: 'PayGuard Backend',
   };
 }
