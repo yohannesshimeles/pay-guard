@@ -112,7 +112,7 @@ jobs:
           cache-from: type=gha,scope=backend-container
           cache-to: type=gha,mode=max,scope=backend-container
       - name: Reject critical and high container vulnerabilities
-        uses: docker/scout-action@481412c8b8de36d0f79e85aa382c60397466feb6 # v1
+        uses: docker/scout-action@bacf462e8d090c09660de30a6ccc718035f961e3 # v1
         with:
           command: cves
           image: local://payguard-backend:ci
@@ -130,7 +130,7 @@ jobs:
             VCS_REF=${{ github.sha }}
           cache-from: type=gha,scope=backend-container
       - name: Reject critical and high worker-image vulnerabilities
-        uses: docker/scout-action@481412c8b8de36d0f79e85aa382c60397466feb6 # v1
+        uses: docker/scout-action@bacf462e8d090c09660de30a6ccc718035f961e3 # v1
         with:
           command: cves
           image: local://payguard-worker:ci
